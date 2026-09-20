@@ -1,4 +1,4 @@
-import { ShowcaseExperience } from "./showcase-experience";
+import ShowcaseExperience from "./showcase-experience";
 
 export default function Home() {
   return <ShowcaseExperience />;
