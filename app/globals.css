@@ -176,6 +176,19 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--primary); outli
   .collection-art { height: 145px; }
   .collection-item { padding: 8px; }
 }
+@media (min-width: 761px) {
+  .app-shell:not(.lookup-shell) .site-header { min-height: 56px; padding: 0 16px; gap: 30px; }
+  .showcase-heading { padding: 7px 14px; min-height: 38px; }
+  .showcase-heading > div { display: flex; align-items: baseline; gap: 14px; }
+  .showcase-heading .eyebrow { font-size: 10px; margin: 0; }
+  .showcase-heading h1 { font-size: 15px; margin: 0; }
+  .showcase-heading h1 span { font-size: 12px; }
+  .public-note { font-size: 12px; }
+  .showcase-body { margin: 0 10px; gap: 10px; grid-template-columns: minmax(0, 1fr) clamp(240px, 21vw, 300px); height: max(400px, calc(100svh - 204px)); }
+  .quick-switch { margin: 8px 10px 0; padding: 9px; gap: 12px; }
+  .switch-label { width: 96px; }
+  .showroom-footer { padding: 8px 14px; }
+}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }

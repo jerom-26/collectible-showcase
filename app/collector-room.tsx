@@ -6,7 +6,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { mintLabel, type ShowcaseAsset } from "@/lib/collection";
 
 // Six display positions leave a clear sightline to the featured piece.
-const surrounding = [[-3.1, -1.9], [3.1, -1.9], [-5.25, .6], [5.25, .6], [-3.35, 3.2], [3.35, 3.2]];
+const surrounding = [[-2.35, -2], [2.35, -2], [-5.9, -.5], [5.9, -.5], [-3.6, 1], [3.6, 1]];
 
 function labelTexture(title: string, subtitle = "", wall = false) {
   const canvas = document.createElement("canvas");
@@ -42,20 +42,14 @@ function pedestalLabelTexture(title: string, subtitle: string) {
   canvas.width = 1024;
   canvas.height = 360;
   const ctx = canvas.getContext("2d")!;
-  const background = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  background.addColorStop(0, "#3b3025");
-  background.addColorStop(1, "#211a14");
-  ctx.fillStyle = background;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = "#8e7252";
-  ctx.lineWidth = 8;
-  ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = "#fff8ec";
   ctx.shadowColor = "rgba(0, 0, 0, .55)";
-  ctx.shadowBlur = 8;
-  ctx.font = "700 76px Arial";
+  ctx.shadowBlur = 2;
+  ctx.shadowOffsetY = -3;
+  ctx.font = "800 94px Arial";
   const words = title.split(" ");
   const lines: string[] = [];
   let line = "";
@@ -70,7 +64,7 @@ function pedestalLabelTexture(title: string, subtitle: string) {
   visibleLines.forEach((value, index) => ctx.fillText(value, 512, startY + index * 72, 920));
   ctx.shadowBlur = 0;
   ctx.fillStyle = "#d7bd96";
-  ctx.font = "600 58px Arial";
+  ctx.font = "700 76px Arial";
   ctx.fillText(subtitle, 512, 286, 900);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -108,8 +102,8 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#a99a89");
     scene.fog = new THREE.Fog("#a99a89", 34, 58);
-    const camera = new THREE.PerspectiveCamera(40, 1, .1, 70);
-    const target = new THREE.Vector3(0, 2.45, -.2);
+    const camera = new THREE.PerspectiveCamera(34, 1, .1, 70);
+    const target = new THREE.Vector3(0, 2.8, -.8);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -124,8 +118,8 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
     controls.enablePan = false;
     controls.minAzimuthAngle = -.22;
     controls.maxAzimuthAngle = .22;
-    controls.minPolarAngle = 1.17;
-    controls.maxPolarAngle = 1.43;
+    controls.minPolarAngle = 1.42;
+    controls.maxPolarAngle = 1.56;
     controls.enableZoom = false;
 
     scene.add(new THREE.HemisphereLight("#fff5e6", "#62584f", 1.45));
@@ -138,27 +132,27 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
     light.shadow.bias = -.001;
     scene.add(light);
     const glow = new THREE.PointLight("#f2d1a6", 24, 20, 2);
-    glow.position.set(0, 5.4, -3.2);
+    glow.position.set(0, 5.15, -3.35);
     scene.add(glow);
 
     const centerLight = new THREE.SpotLight("#ffe5c2", 68, 24, Math.PI * .23, .76, 1.45);
-    centerLight.position.set(0, 7.25, 3.8);
-    centerLight.target.position.set(0, .4, .65);
+    centerLight.position.set(0, 6.15, 3.4);
+    centerLight.target.position.set(0, 1.2, -1);
     centerLight.castShadow = true;
     centerLight.shadow.mapSize.set(1024, 1024);
     centerLight.shadow.bias = -.001;
     scene.add(centerLight, centerLight.target);
 
     const wallWashLeft = new THREE.PointLight("#e7c69d", 14, 13, 2);
-    wallWashLeft.position.set(-7.7, 5.8, -4.7);
+    wallWashLeft.position.set(-8.9, 5.7, -6.45);
     const wallWashRight = wallWashLeft.clone();
-    wallWashRight.position.x = 7.7;
+    wallWashRight.position.x = 8.9;
     scene.add(wallWashLeft, wallWashRight);
 
     const cornerFillLeft = new THREE.PointLight("#c9b397", 15, 12, 2);
-    cornerFillLeft.position.set(-8.7, 2.8, 1.3);
+    cornerFillLeft.position.set(-9.7, 3.2, 1.1);
     const cornerFillRight = cornerFillLeft.clone();
-    cornerFillRight.position.x = 8.7;
+    cornerFillRight.position.x = 9.7;
     scene.add(cornerFillLeft, cornerFillRight);
 
     const surfaceTexture = (base: number, variation: number, repeatX: number, repeatY: number) => {
@@ -201,9 +195,8 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
     const topMat = new THREE.MeshStandardMaterial({ color: "#6a563f", metalness: .58, roughness: .34 });
     const trimMat = new THREE.MeshStandardMaterial({ color: "#a7845d", emissive: "#60462c", emissiveIntensity: .16, metalness: .66, roughness: .38 });
     const frameMat = new THREE.MeshStandardMaterial({ color: "#5c4a39", metalness: .56, roughness: .42 });
-    const labelBackingMat = new THREE.MeshStandardMaterial({ color: "#211a14", metalness: .35, roughness: .48 });
     const downlightMat = new THREE.MeshStandardMaterial({ color: "#e8d3b5", emissive: "#ffe3ba", emissiveIntensity: 1.2, roughness: .5 });
-    [wallMat, featureWallMat, ceilingMat, woodMat, baseMat, topMat, trimMat, frameMat, labelBackingMat, downlightMat].forEach(m => materials.add(m));
+    [wallMat, featureWallMat, ceilingMat, woodMat, baseMat, topMat, trimMat, frameMat, downlightMat].forEach(m => materials.add(m));
     function box(w: number, h: number, d: number, x: number, y: number, z: number, material: THREE.Material) {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
       mesh.position.set(x, y, z);
@@ -222,28 +215,30 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
       bumpScale: .009,
     });
     materials.add(floorMat);
-    box(28, .2, 28, 0, -.12, 0, floorMat);
-    box(20, 8, .25, 0, 3.9, -5.8, wallMat);
-    box(.25, 8, 15, -9.6, 3.9, 1.5, wallMat);
-    box(.25, 8, 15, 9.6, 3.9, 1.5, wallMat);
-    box(20, .2, 18, 0, 7.9, 2, ceilingMat);
-    box(10.8, 6.55, .1, 0, 3.55, -5.61, featureWallMat);
-    [-7.25, 7.25].forEach(x => box(2.15, 6.6, .12, x, 3.55, -5.55, woodMat));
-    [-8.1, -7.55, -7, -6.45, 6.45, 7, 7.55, 8.1].forEach(x => box(.035, 6.25, .04, x, 3.55, -5.46, frameMat));
-    box(18, .035, .075, 0, 6.88, -5.46, trimMat);
-    box(18, .02, .075, 0, .28, -5.46, trimMat);
-    [-5.55, 5.55].forEach(x => box(.045, 6.35, .05, x, 3.55, -5.5, trimMat));
-    [-8.65, 8.65].forEach(x => box(.055, 6.5, .055, x, 3.6, -5.36, downlightMat));
-    [-6.5, -2.2, 2.2, 6.5].forEach(x => box(2.8, .035, .09, x, 7.72, -2.9, downlightMat));
+    box(26, .2, 21, 0, -.12, .5, floorMat);
+    box(21, 7.45, .25, 0, 3.6, -7.4, wallMat);
+    box(.25, 7.45, 14.5, -10.5, 3.6, -.15, wallMat);
+    box(.25, 7.45, 14.5, 10.5, 3.6, -.15, wallMat);
+    box(21, .2, 15, 0, 7.35, .1, ceilingMat);
+    box(11.5, 5.9, .1, 0, 3.55, -7.23, featureWallMat);
+    [-8.25, 8.25].forEach(x => box(2.25, 6.2, .2, x, 3.55, -7.08, woodMat));
+    [-9.05, -8.5, -7.95, -7.4, 7.4, 7.95, 8.5, 9.05].forEach(x => box(.035, 5.85, .04, x, 3.55, -6.95, frameMat));
+    box(18.8, .035, .075, 0, 6.62, -6.94, trimMat);
+    box(18.8, .02, .075, 0, .38, -6.94, trimMat);
+    [-5.75, 5.75].forEach(x => box(.045, 5.9, .05, x, 3.55, -7.02, trimMat));
+    [-9.75, 9.75].forEach(x => box(.055, 6.2, .055, x, 3.6, -6.85, downlightMat));
+    box(14.4, .18, 1.05, 0, 7.18, -6.45, ceilingMat);
+    [-9.25, 9.25].forEach(x => box(.18, .16, 10.5, x, 7.18, -.95, ceilingMat));
+    [-6.6, -2.2, 2.2, 6.6].forEach(x => box(2.45, .035, .09, x, 7.15, -4.3, downlightMat));
 
-    const displaySlots = [[0, .65], ...surrounding];
+    const displaySlots = [[0, -1], ...surrounding];
     displaySlots.forEach(([x, z], index) => {
       const spot = new THREE.SpotLight("#ffe7c5", index === 0 ? 26 : 13, 14, Math.PI * .14, .84, 1.5);
-      spot.position.set(x, 7.35, z + .25);
-      spot.target.position.set(x, .7, z);
+      spot.position.set(x, 7.1, z + .2);
+      spot.target.position.set(x, 1.05, z);
       scene.add(spot, spot.target);
       const fixture = new THREE.Mesh(new THREE.CylinderGeometry(.11, .11, .035, 24), downlightMat);
-      fixture.position.set(x, 7.73, z + .25);
+      fixture.position.set(x, 7.2, z + .2);
       scene.add(fixture);
     });
     const wallTitle = labelTexture("MY HOT WHEELS NFTS", "", true);
@@ -251,10 +246,23 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
     const titleMat = new THREE.MeshBasicMaterial({ map: wallTitle, transparent: true, toneMapped: false });
     materials.add(titleMat);
     const title = new THREE.Mesh(new THREE.PlaneGeometry(7.2, .9), titleMat);
-    title.position.set(0, 6.08, -5.52);
+    title.position.set(0, 6.5, -6.82);
     scene.add(title);
 
     const loader = new THREE.TextureLoader();
+    const shadowCanvas = document.createElement("canvas");
+    shadowCanvas.width = shadowCanvas.height = 128;
+    const shadowContext = shadowCanvas.getContext("2d")!;
+    const shadowGradient = shadowContext.createRadialGradient(64, 64, 8, 64, 64, 64);
+    shadowGradient.addColorStop(0, "rgba(0,0,0,.48)");
+    shadowGradient.addColorStop(.5, "rgba(0,0,0,.22)");
+    shadowGradient.addColorStop(1, "rgba(0,0,0,0)");
+    shadowContext.fillStyle = shadowGradient;
+    shadowContext.fillRect(0, 0, 128, 128);
+    const contactTexture = new THREE.CanvasTexture(shadowCanvas);
+    textures.add(contactTexture);
+    const contactMat = new THREE.MeshBasicMaterial({ map: contactTexture, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 });
+    materials.add(contactMat);
     loader.setCrossOrigin("anonymous");
     const clickable: THREE.Object3D[] = [];
     const displays: { group: THREE.Group; card: THREE.Group; cardBaseY: number; index: number; target: THREE.Vector3; size: number }[] = [];
@@ -263,6 +271,8 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
       textures.add(placeholder);
       const artMat = new THREE.MeshBasicMaterial({ map: placeholder, toneMapped: false, side: THREE.DoubleSide });
       materials.add(artMat);
+      const reflectionMat = new THREE.MeshBasicMaterial({ map: placeholder, transparent: true, opacity: .075, depthWrite: false, toneMapped: false });
+      materials.add(reflectionMat);
       const planes: THREE.Mesh[] = [];
       const frames: THREE.Mesh[] = [];
       const updateRatio = (width: number, height: number) => {
@@ -278,6 +288,8 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
         texture.colorSpace = THREE.SRGBColorSpace;
         artMat.map = texture;
         artMat.needsUpdate = true;
+        reflectionMat.map = texture;
+        reflectionMat.needsUpdate = true;
       };
       const failed = () => {
         if (disposed) return;
@@ -305,39 +317,53 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
         return group;
       };
       const group = new THREE.Group();
-      const pedestalHeight = [.8, .68, .86, .72, .82, .7, .76][index % 7];
-      const footHeight = .1;
-      const foot = new THREE.Mesh(new THREE.CylinderGeometry(1.18, 1.2, footHeight, 64), baseMat);
+      const originalHeight = [.9, .84, .98, .88, .95, .86, .92][index % 7];
+      const pedestalHeight = originalHeight - .06;
+      const footHeight = .06;
+      const foot = new THREE.Mesh(new THREE.CylinderGeometry(.86, .88, footHeight, 64), baseMat);
       foot.position.y = footHeight / 2;
       foot.castShadow = true;
       foot.receiveShadow = true;
       group.add(foot);
-      const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(1.12, 1.17, pedestalHeight, 64), baseMat);
+      const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(.9, .9, pedestalHeight, 96), baseMat);
       pedestal.position.y = footHeight + pedestalHeight / 2;
       pedestal.castShadow = true;
       pedestal.receiveShadow = true;
       group.add(pedestal);
-      const cap = new THREE.Mesh(new THREE.CylinderGeometry(1.13, 1.13, .045, 64), topMat);
-      cap.position.y = footHeight + pedestalHeight + .0225;
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(.915, .915, .025, 96), topMat);
+      cap.position.y = footHeight + pedestalHeight + .0125;
+      cap.receiveShadow = true;
       group.add(cap);
-      [footHeight + .012, footHeight + pedestalHeight + .045].forEach(y => {
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(1.13, .014, 6, 64), trimMat);
+      [footHeight + .012, footHeight + pedestalHeight + .025].forEach(y => {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(.908, .008, 6, 96), trimMat);
         ring.rotation.x = Math.PI / 2;
         ring.position.y = y;
         group.add(ring);
       });
       const plaqueTexture = pedestalLabelTexture(asset.name, mintLabel(asset));
       textures.add(plaqueTexture);
-      const plaqueMat = new THREE.MeshStandardMaterial({ map: plaqueTexture, roughness: .5, metalness: .16 });
+      plaqueTexture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+      const plaqueMat = new THREE.MeshStandardMaterial({ map: plaqueTexture, transparent: true, roughness: .65, metalness: .1, emissiveMap: plaqueTexture, emissive: "#fff8ec", emissiveIntensity: .25, depthWrite: false });
       materials.add(plaqueMat);
-      const plaqueBacking = new THREE.Mesh(new THREE.BoxGeometry(1.9, .64, .035), labelBackingMat);
-      plaqueBacking.position.set(0, footHeight + pedestalHeight * .5, 1.145);
-      group.add(plaqueBacking);
-      const plaque = new THREE.Mesh(new THREE.PlaneGeometry(1.8, .56), plaqueMat);
-      plaque.position.set(0, footHeight + pedestalHeight * .5, 1.166);
+      // Lettering hugs the cylinder rather than projecting on a separate plaque.
+      const plaque = new THREE.Mesh(new THREE.CylinderGeometry(.902, .902, pedestalHeight * .88, 64, 1, true, -1.05, 2.1), plaqueMat);
+      plaque.position.set(0, footHeight + pedestalHeight * .5, 0);
       group.add(plaque);
+      const capY = footHeight + pedestalHeight + .025;
+      const contact = new THREE.Mesh(new THREE.PlaneGeometry(1.55, .8), contactMat);
+      contact.rotation.x = -Math.PI / 2;
+      contact.position.set(0, capY + .003, 0);
+      group.add(contact);
+      const reflection = new THREE.Mesh(new THREE.PlaneGeometry(1.15, .5), reflectionMat);
+      reflection.rotation.x = -Math.PI / 2;
+      reflection.position.set(0, capY + .005, .25);
+      group.add(reflection);
+      const groundContact = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 2.3), contactMat);
+      groundContact.rotation.x = -Math.PI / 2;
+      groundContact.position.y = .002;
+      group.add(groundContact);
       const card = makeCard();
-      const cardBaseY = footHeight + pedestalHeight + 1.28;
+      const cardBaseY = .1 + originalHeight + 1.28;
       card.position.y = cardBaseY;
       group.add(card);
       scene.add(group);
@@ -346,8 +372,8 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
       // Three quieter, repeated highlights; these are not additional owned NFTs.
       if (index < 3) {
         const wallCard = makeCard();
-        wallCard.position.set((index - 1) * 2.2, 4.48, -5.45);
-        wallCard.scale.setScalar(.7);
+        wallCard.position.set((index - 1) * 1.85, 5.58, -6.78);
+        wallCard.scale.setScalar(.46);
         scene.add(wallCard);
       }
       updateRatio(7, 10);
@@ -379,11 +405,11 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
         const featured = display.index === selected;
         // Accounts larger than seven retain every item in Quick switch; the
         // room displays the selected item and the first six other collectibles.
-        const position = featured ? [0, .65] : surrounding[slot++];
+        const position = featured ? [0, -1] : surrounding[slot++];
         display.group.visible = !!position;
         if (position) {
           display.target.set(position[0], 0, position[1]);
-          display.size = featured ? 1.42 : .9;
+          display.size = featured ? 1.2 : .78;
           if (lastSelection === -1 || mediaQuery.matches) {
             display.group.position.copy(display.target);
             display.group.scale.setScalar(display.size);
@@ -423,8 +449,9 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
       const width = Math.max(mount.clientWidth, 1), height = Math.max(mount.clientHeight, 1);
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
-      const distance = Math.max(14.5, 18 / camera.aspect + 1);
-      camera.position.set(0, 2.45 + distance * .22, distance);
+      // Fit the outer displays with a margin even in a narrower browser pane.
+      const distance = Math.max(12.5, 6.9 / (Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect));
+      camera.position.set(0, 3, distance);
       camera.updateProjectionMatrix();
       controls.update();
     };
@@ -441,7 +468,8 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
         const amount = mediaQuery.matches ? 1 : 1 - Math.exp(-delta * 8);
         display.group.position.lerp(display.target, amount);
         display.group.scale.lerp(new THREE.Vector3(display.size, display.size, display.size), amount);
-        display.card.position.y = display.cardBaseY + (mediaQuery.matches ? 0 : Math.sin(time * .0008 + display.index) * .035);
+        const featuredLift = display.index === selectedRef.current ? .035 : 0;
+        display.card.position.y = display.cardBaseY + featuredLift + (mediaQuery.matches ? 0 : Math.sin(time * .00065 + display.index) * .045);
       });
       controls.update();
       if (!document.hidden) renderer.render(scene, camera);
