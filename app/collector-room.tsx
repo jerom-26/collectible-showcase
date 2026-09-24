@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { mintLabel, type ShowcaseAsset } from "@/lib/collection";
+import { acquireMedia } from "@/lib/nft-media";
 
 // Six display positions leave a clear sightline to the featured piece.
 const surrounding = [[-2.35, -2], [2.35, -2], [-5.9, -.5], [5.9, -.5], [-3.6, 1], [3.6, 1]];
@@ -71,16 +72,19 @@ function pedestalLabelTexture(title: string, subtitle: string) {
   return texture;
 }
 
-export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
+export default function CollectorRoom({ assets, selectedIndex, onSelect, mediaActive = true }: {
   assets: ShowcaseAsset[];
   selectedIndex: number;
   onSelect: (index: number) => void;
+  mediaActive?: boolean;
 }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const selectedRef = useRef(selectedIndex);
+  const activeRef = useRef(mediaActive);
   const onSelectRef = useRef(onSelect);
   const [unavailable, setUnavailable] = useState(false);
   useEffect(() => { selectedRef.current = selectedIndex; }, [selectedIndex]);
+  useEffect(() => { activeRef.current = mediaActive; }, [mediaActive]);
   useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
 
   useEffect(() => {
@@ -97,7 +101,7 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
     let disposed = false;
     const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     const textures = new Set<THREE.Texture>();
-    const videos: HTMLVideoElement[] = [];
+    const mediaHandles: ReturnType<typeof acquireMedia>[] = [];
     const materials = new Set<THREE.Material>();
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#a99a89");
@@ -309,7 +313,6 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
     title.position.set(0, 7.6, -11.42);
     scene.add(title);
 
-    const loader = new THREE.TextureLoader();
     const shadowCanvas = document.createElement("canvas");
     shadowCanvas.width = shadowCanvas.height = 128;
     const shadowContext = shadowCanvas.getContext("2d")!;
@@ -323,7 +326,6 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
     textures.add(contactTexture);
     const contactMat = new THREE.MeshBasicMaterial({ map: contactTexture, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 });
     materials.add(contactMat);
-    loader.setCrossOrigin("anonymous");
     const clickable: THREE.Object3D[] = [];
     const displays: { group: THREE.Group; card: THREE.Group; cardBaseY: number; index: number; target: THREE.Vector3; size: number }[] = [];
     assets.forEach((asset, index) => {
@@ -350,17 +352,6 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
         artMat.needsUpdate = true;
         reflectionMat.map = texture;
         reflectionMat.needsUpdate = true;
-      };
-      const failed = () => {
-        if (disposed) return;
-        applyTexture(labelTexture(asset.name, "Artwork unavailable"));
-      };
-      const loadImage = () => {
-        if (!asset.imageUrl) { failed(); return; }
-        loader.load(asset.imageUrl, texture => {
-          if (!disposed) updateRatio(texture.image.width, texture.image.height);
-          applyTexture(texture);
-        }, undefined, failed);
       };
       const makeCard = () => {
         const group = new THREE.Group();
@@ -442,36 +433,44 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
         scene.add(wallCard);
       }
       updateRatio(7, 10);
-      if (asset.videoUrl) {
-        const video = document.createElement("video");
-        video.crossOrigin = "anonymous";
-        video.muted = true;
-        video.loop = true;
-        video.playsInline = true;
-        video.preload = "auto";
-        video.onloadeddata = () => {
-          if (disposed) return;
-          updateRatio(video.videoWidth, video.videoHeight);
-          applyTexture(new THREE.VideoTexture(video));
-          if (!mediaQuery.matches && !document.hidden) void video.play().catch(() => undefined);
-        };
-        video.onerror = loadImage;
-        videos.push(video);
-        video.src = asset.videoUrl;
-        video.load();
-      } else loadImage();
+      let imageTexture: THREE.Texture | undefined;
+      let videoTexture: THREE.VideoTexture | undefined;
+      let unavailableTexture: THREE.Texture | undefined;
+      const featured = index === selectedRef.current;
+      const visible = featured || index < (selectedRef.current < 7 ? 7 : 6);
+      mediaHandles.push(acquireMedia(asset, { priority: featured ? 0 : visible ? 1 : 2, animate: activeRef.current && visible }, media => {
+        if (disposed) return;
+        if (media.image && !imageTexture) {
+          imageTexture = new THREE.Texture(media.image);
+          imageTexture.needsUpdate = true;
+          textures.add(imageTexture);
+        }
+        if (media.videoReady && media.video) {
+          videoTexture ??= new THREE.VideoTexture(media.video);
+          updateRatio(media.video.videoWidth, media.video.videoHeight);
+          applyTexture(videoTexture);
+        } else if (imageTexture && media.image) {
+          updateRatio(media.image.naturalWidth, media.image.naturalHeight);
+          applyTexture(imageTexture);
+        } else if (media.failed && !videoTexture) {
+          unavailableTexture ??= labelTexture(asset.name, "Artwork unavailable");
+          applyTexture(unavailableTexture);
+        }
+      }));
     });
-    let lastSelection = -1;
-    function layout() {
-      const selected = selectedRef.current;
-      if (lastSelection === selected) return;
+      let lastSelection = -1;
+      let lastActive: boolean | undefined;
+      function layout() {
+        const selected = selectedRef.current;
+        if (lastSelection === selected && lastActive === activeRef.current) return;
       let slot = 0;
       displays.forEach(display => {
         const featured = display.index === selected;
         // Accounts larger than seven retain every item in Quick switch; the
         // room displays the selected item and the first six other collectibles.
         const position = featured ? [0, -1] : surrounding[slot++];
-        display.group.visible = !!position;
+          display.group.visible = !!position;
+          mediaHandles[display.index].update({ priority: featured ? 0 : position || display.index < 3 ? 1 : 2, animate: activeRef.current && (!!position || display.index < 3) });
         if (position) {
           display.target.set(position[0], 0, position[1]);
           display.size = featured ? 1.2 : .78;
@@ -482,14 +481,9 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
         }
       });
       mount!.dataset.featuredAsset = assets[selected]?.assetId ?? "";
-      lastSelection = selected;
-    }
-    const syncPlayback = () => videos.forEach(video => {
-      if (mediaQuery.matches || document.hidden) video.pause();
-      else if (video.readyState >= 2) void video.play().catch(() => undefined);
-    });
-    mediaQuery.addEventListener("change", syncPlayback);
-    document.addEventListener("visibilitychange", syncPlayback);
+        lastSelection = selected;
+        lastActive = activeRef.current;
+      }
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     let startX = 0, startY = 0;
@@ -546,12 +540,10 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
       cancelAnimationFrame(frameId);
       observer.disconnect();
       controls.dispose();
-      mediaQuery.removeEventListener("change", syncPlayback);
-      document.removeEventListener("visibilitychange", syncPlayback);
       renderer.domElement.removeEventListener("pointerdown", down);
       renderer.domElement.removeEventListener("pointerup", up);
       renderer.domElement.removeEventListener("webglcontextlost", lost);
-      videos.forEach(video => { video.onloadeddata = null; video.onerror = null; video.pause(); video.removeAttribute("src"); video.load(); });
+      mediaHandles.forEach(handle => handle.release());
       scene.traverse(object => { if (object instanceof THREE.Mesh) object.geometry.dispose(); });
       textures.forEach(texture => texture.dispose());
       materials.forEach(material => material.dispose());

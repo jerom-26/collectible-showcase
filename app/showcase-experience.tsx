@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { mintLabel, seriesLabel, WAX_ACCOUNT, type ShowcaseAsset } from "@/lib/collection";
 import CollectorRoom from "./collector-room";
+import { acquireMedia, type MediaState } from "@/lib/nft-media";
 
 declare global {
   interface Document {
@@ -20,34 +21,27 @@ declare global {
 }
 
 function AssetMedia({ asset, animated = false }: { asset: ShowcaseAsset; animated?: boolean }) {
-  const [failed, setFailed] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const [media, setMedia] = useState<MediaState>({ image: null, video: null, videoReady: false, still: null, failed: false });
+  const videoHost = useRef<HTMLSpanElement>(null);
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !animated) return;
-    const preference = matchMedia("(prefers-reduced-motion: reduce)");
-    const update = () => {
-      if (preference.matches || document.hidden) video.pause();
-      else void video.play().catch(() => undefined);
-    };
-    update();
-    preference.addEventListener("change", update);
-    document.addEventListener("visibilitychange", update);
+    const handle = acquireMedia(asset, { priority: animated ? 0 : 2, animate: animated }, setMedia);
+    return () => handle.release();
+  }, [asset, animated]);
+  useEffect(() => {
+    const host = videoHost.current;
+    const video = media.video;
+    if (!animated || !media.videoReady || !video || !host) return;
+    host.appendChild(video);
     return () => {
-      video.pause();
-      preference.removeEventListener("change", update);
-      document.removeEventListener("visibilitychange", update);
+      if (video.parentNode === host) host.removeChild(video);
     };
-  }, [animated]);
-  if (failed || (!asset.videoUrl && !asset.imageUrl)) {
-    return <span className="media-fallback"><Box size={22} /><span>Artwork unavailable</span></span>;
-  }
-  return asset.videoUrl ? <video
-    ref={videoRef} src={asset.videoUrl} muted playsInline loop={animated}
-    preload={animated ? "auto" : "metadata"} aria-label={`${asset.name} NFT artwork`}
-    onLoadedData={event => { if (!animated) event.currentTarget.currentTime = .1; }}
-    onError={() => setFailed(true)}
-  /> : <img src={asset.imageUrl!} alt={`${asset.name} NFT artwork`} onError={() => setFailed(true)} />;
+  }, [animated, media.video, media.videoReady]);
+  const poster = media.image?.src || media.still;
+  return <span className="nft-media">
+    {poster ? <img src={poster} crossOrigin="anonymous" alt={`${asset.name} NFT artwork`} />
+      : <span className="media-fallback"><Box size={22} /><span>{media.failed ? "Artwork unavailable" : "Loading artwork"}</span></span>}
+    {animated && <span className="nft-media-video" ref={videoHost} />}
+  </span>;
 }
 
 type View = "lookup" | "showroom";
@@ -205,7 +199,7 @@ export default function ShowcaseExperience({ initialView = "lookup" }: { initial
       <div className="showcase-body">
         <section className="collection-surface" aria-label={section === "showroom" ? "Collector room" : "My Collection"}>
           <div className={section === "showroom" ? "room-view" : "room-view is-hidden"}>
-            <CollectorRoom assets={assets} selectedIndex={selectedIndex} onSelect={select} />
+            <CollectorRoom assets={assets} selectedIndex={selectedIndex} onSelect={select} mediaActive={section === "showroom"} />
             <div className="room-caption"><span>FEATURED</span><strong aria-live="polite">{selected.name}</strong><span>{mintLabel(selected)}</span></div>
             <p className="room-help">Drag gently to look around</p>
           </div>

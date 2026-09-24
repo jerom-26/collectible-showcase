@@ -13,6 +13,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
+      <head><link rel="preconnect" href="https://gateway.pinata.cloud" crossOrigin="anonymous" /></head>
       <body>{children}</body>
     </html>
   );
