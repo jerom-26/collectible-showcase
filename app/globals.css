@@ -189,6 +189,77 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--primary); outli
   .switch-label { width: 96px; }
   .showroom-footer { padding: 8px 14px; }
 }
+/* Below desktop, preserve a landscape canvas and put details in document flow. */
+@media (max-width: 1199px) {
+  .app-shell:not(.lookup-shell) { display: block; }
+  .showcase-body { display: grid; grid-template-columns: minmax(0, 1fr); height: auto; gap: 12px; margin: 0 12px; }
+  .collection-surface { margin: 0; order: initial; }
+  .room-view { height: auto; aspect-ratio: 16 / 9; }
+  .room-canvas { position: relative; }
+  .room-canvas canvas { position: absolute; inset: 0; }
+  .details-panel { display: grid; grid-template-columns: minmax(140px, 24%) minmax(0, 1fr); grid-template-areas: "controls controls" "art copy" "link copy"; align-items: start; gap: 14px 24px; margin: 0; padding: 18px; order: initial; overflow: visible; }
+  .detail-top { grid-area: controls; }
+  .detail-top button { width: 44px; height: 44px; }
+  .detail-art { grid-area: art; height: 240px; margin: 0; min-width: 0; }
+  .detail-copy { grid-area: copy; min-width: 0; overflow-wrap: anywhere; }
+  .detail-copy h2 { font-size: 23px; }
+  .detail-copy dl { grid-template-columns: 108px minmax(0, 1fr); font-size: 14px; margin-bottom: 0; }
+  .detail-copy dt { overflow-wrap: anywhere; }
+  .record-link { grid-area: link; min-height: 44px; margin: 0; }
+  .quick-switch { margin: 12px; order: initial; min-width: 0; }
+  .switch-list { min-width: 0; max-width: 100%; }
+  .switch-item { flex: 0 0 190px; min-height: 88px; }
+  .switch-copy strong { display: block; overflow: visible; -webkit-line-clamp: unset; overflow-wrap: anywhere; }
+  .site-header nav button, .account-link { min-height: 44px; }
+  .collection-grid { max-height: none; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+  .collection-item { min-width: 0; }
+  .collection-art { grid-template-rows: minmax(0, 1fr); min-width: 0; }
+  .collection-art video, .collection-art img { min-height: 0; min-width: 0; }
+  .collection-item-name { overflow-wrap: anywhere; }
+}
+@media (min-width: 601px) and (max-width: 760px) {
+  .site-header { padding: 10px 16px 0; }
+  .showcase-heading { padding: 12px 16px; }
+  .quick-switch { flex-direction: row; }
+  .switch-label { display: block; width: 96px; }
+  .switch-list { width: auto; }
+}
+@media (max-width: 600px) {
+  .site-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; padding: 10px 12px 0; min-height: 0; }
+  .brand { grid-column: 1 / -1; min-width: 0; min-height: 44px; font-size: 18px; gap: 9px; }
+  .site-header nav { grid-column: 1; grid-row: 2; width: auto; order: initial; gap: 18px; min-width: 0; }
+  .site-header nav button { font-size: 13px; white-space: nowrap; }
+  .account-link { grid-column: 2; grid-row: 2; margin: 0; min-width: 0; gap: 5px; font-size: 13px; }
+  .account-link > span:first-child { overflow-wrap: anywhere; max-width: 12ch; }
+  .account-link svg { flex-shrink: 0; margin: 0; }
+  .account-link-label { display: none; }
+  .showcase-heading { padding: 10px 12px; }
+  .showcase-heading h1 { font-size: 16px; overflow-wrap: anywhere; }
+  .showcase-heading h1 span { display: inline; margin-left: 6px; font-size: 13px; }
+  .showcase-heading .eyebrow { font-size: 10px; }
+  .showcase-body { margin: 0 8px; gap: 10px; }
+  .room-view { display: flex; flex-direction: column; aspect-ratio: auto; }
+  .room-view.is-hidden { display: none; }
+  .room-canvas { height: auto; aspect-ratio: 16 / 9; flex: none; }
+  .room-caption { position: static; order: -1; padding: 10px 12px 6px; gap: 2px; }
+  .room-caption strong { max-width: none; overflow-wrap: anywhere; }
+  .room-help { position: static; padding: 5px 8px 8px; margin: 0; }
+  .room-unavailable { inset: 25% 8% auto; padding: 12px; }
+  .details-panel { grid-template-columns: 92px minmax(0, 1fr); gap: 12px; padding: 12px; grid-template-areas: "controls controls" "art copy" "link link"; }
+  .detail-art { height: 145px; }
+  .detail-copy h2 { font-size: 20px; }
+  .collection-name { font-size: 14px; margin-bottom: 12px; }
+  .detail-copy dl { grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 8px; font-size: 14px; padding-top: 12px; }
+  .asset-tags { gap: 5px; }
+  .asset-tags span { max-width: 100%; overflow-wrap: anywhere; }
+  .quick-switch { margin: 10px 8px; padding: 10px; flex-direction: column; gap: 8px; }
+  .switch-label { display: flex; width: 100%; justify-content: space-between; padding: 0; }
+  .switch-list { width: 100%; flex: none; }
+  .collection-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 10px; }
+  .collection-art { height: 160px; }
+  .collection-item-action { flex-wrap: wrap; }
+  .showroom-footer { padding: 8px 12px 16px; }
+}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
