@@ -109,7 +109,7 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.08;
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.domElement.setAttribute("aria-label", "3D collector room. Use Quick switch below to select a collectible.");
     mount.appendChild(renderer.domElement);
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -122,20 +122,20 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
     controls.maxPolarAngle = 1.56;
     controls.enableZoom = false;
 
-    scene.add(new THREE.HemisphereLight("#fff5e6", "#62584f", 1.45));
+    scene.add(new THREE.HemisphereLight("#fff5e6", "#62584f", 1.7));
     scene.add(new THREE.AmbientLight("#f0dfc8", .28));
-    const light = new THREE.DirectionalLight("#fff1dd", 1.65);
+    const light = new THREE.DirectionalLight("#fff1dd", 1.1);
     light.position.set(1, 10, 7);
     light.castShadow = true;
-    light.shadow.mapSize.set(2048, 2048);
+    light.shadow.mapSize.set(1024, 1024);
     Object.assign(light.shadow.camera, { left: -10, right: 10, top: 10, bottom: -10 });
     light.shadow.bias = -.001;
     scene.add(light);
-    const glow = new THREE.PointLight("#f2d1a6", 24, 20, 2);
-    glow.position.set(0, 5.15, -3.35);
+    const glow = new THREE.PointLight("#f2d1a6", 14, 24, 2);
+    glow.position.set(0, 8.2, -5);
     scene.add(glow);
 
-    const centerLight = new THREE.SpotLight("#ffe5c2", 68, 24, Math.PI * .23, .76, 1.45);
+    const centerLight = new THREE.SpotLight("#ffe5c2", 48, 24, Math.PI * .26, 1, 1.45);
     centerLight.position.set(0, 6.15, 3.4);
     centerLight.target.position.set(0, 1.2, -1);
     centerLight.castShadow = true;
@@ -143,16 +143,16 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
     centerLight.shadow.bias = -.001;
     scene.add(centerLight, centerLight.target);
 
-    const wallWashLeft = new THREE.PointLight("#e7c69d", 14, 13, 2);
-    wallWashLeft.position.set(-8.9, 5.7, -6.45);
+    const wallWashLeft = new THREE.PointLight("#e7c69d", 8, 18, 2);
+    wallWashLeft.position.set(-9.5, 7.8, -8.5);
     const wallWashRight = wallWashLeft.clone();
-    wallWashRight.position.x = 8.9;
+    wallWashRight.position.x = 9.5;
     scene.add(wallWashLeft, wallWashRight);
 
-    const cornerFillLeft = new THREE.PointLight("#c9b397", 15, 12, 2);
-    cornerFillLeft.position.set(-9.7, 3.2, 1.1);
+    const cornerFillLeft = new THREE.PointLight("#c9b397", 6, 16, 2);
+    cornerFillLeft.position.set(-10.5, 5.5, -.8);
     const cornerFillRight = cornerFillLeft.clone();
-    cornerFillRight.position.x = 9.7;
+    cornerFillRight.position.x = 10.5;
     scene.add(cornerFillLeft, cornerFillRight);
 
     const surfaceTexture = (base: number, variation: number, repeatX: number, repeatY: number) => {
@@ -177,25 +177,77 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
       textures.add(texture);
       return texture;
     };
-    const wallVariation = surfaceTexture(154, 18, 7, 4);
-    const floorVariation = surfaceTexture(142, 16, 9, 9);
-    const woodVariation = surfaceTexture(132, 22, 2, 8);
+    const wallVariation = surfaceTexture(230, 4, 7, 4);
+    const floorVariation = surfaceTexture(228, 6, 6, 6);
+    const woodCanvas = document.createElement("canvas");
+    woodCanvas.width = woodCanvas.height = 256;
+    const woodContext = woodCanvas.getContext("2d")!;
+    woodContext.fillStyle = "#eeeeee";
+    woodContext.fillRect(0, 0, 256, 256);
+    for (let x = 0; x < 256; x += 2) {
+      woodContext.strokeStyle = `rgba(95,85,70,${.035 + (Math.sin(x * 1.73) + 1) * .02})`;
+      woodContext.lineWidth = .6;
+      woodContext.beginPath();
+      woodContext.moveTo(x, 0);
+      woodContext.bezierCurveTo(x + Math.sin(x) * 3, 85, x - 2, 170, x + 1, 256);
+      woodContext.stroke();
+    }
+    const woodVariation = new THREE.CanvasTexture(woodCanvas);
+    woodVariation.colorSpace = THREE.NoColorSpace;
+    textures.add(woodVariation);
+    // Broad, low-contrast plaster variation under fine grain, generated once.
+    const plasterCanvas = document.createElement("canvas");
+    plasterCanvas.width = plasterCanvas.height = 512;
+    const plasterContext = plasterCanvas.getContext("2d")!;
+    plasterContext.fillStyle = "#eeeae4";
+    plasterContext.fillRect(0, 0, 512, 512);
+    let plasterSeed = 37;
+    const plasterRandom = () => {
+      plasterSeed = (Math.imul(plasterSeed, 1664525) + 1013904223) >>> 0;
+      return plasterSeed / 4294967296;
+    };
+    for (let i = 0; i < 90; i++) {
+      const x = plasterRandom() * 512, y = plasterRandom() * 512;
+      const radius = 25 + plasterRandom() * 100;
+      const wash = plasterContext.createRadialGradient(x, y, 0, x, y, radius);
+      wash.addColorStop(0, i % 2 ? "rgba(105,98,87,.018)" : "rgba(255,255,255,.03)");
+      wash.addColorStop(1, "rgba(160,150,135,0)");
+      plasterContext.fillStyle = wash;
+      plasterContext.fillRect(0, 0, 512, 512);
+    }
+    const plasterPixels = plasterContext.getImageData(0, 0, 512, 512);
+    for (let i = 0; i < plasterPixels.data.length; i += 4) {
+      const grain = (plasterRandom() - .5) * 2;
+      for (let channel = 0; channel < 3; channel++) plasterPixels.data[i + channel] += grain;
+    }
+    plasterContext.putImageData(plasterPixels, 0, 0);
+    const plasterMap = new THREE.CanvasTexture(plasterCanvas);
+    plasterMap.colorSpace = THREE.SRGBColorSpace;
+    const plasterBump = plasterMap.clone();
+    plasterBump.colorSpace = THREE.NoColorSpace;
+    textures.add(plasterMap);
+    textures.add(plasterBump);
     const wallMat = new THREE.MeshStandardMaterial({
       color: "#968673",
-      roughness: .76,
-      metalness: .02,
-      roughnessMap: wallVariation,
-      bumpMap: wallVariation,
-      bumpScale: .014,
+      roughness: .88,
+      metalness: 0,
+      map: plasterMap,
+      bumpMap: plasterBump,
+      bumpScale: .016,
     });
-    const featureWallMat = new THREE.MeshStandardMaterial({ color: "#ad9c87", roughness: .72, metalness: .02, roughnessMap: wallVariation });
+    const featureWallMat = new THREE.MeshStandardMaterial({ color: "#ad9c87", roughness: .84, metalness: 0, map: plasterMap, bumpMap: plasterBump, bumpScale: .025 });
     const ceilingMat = new THREE.MeshStandardMaterial({ color: "#b9aa96", roughness: .8, metalness: .01 });
-    const woodMat = new THREE.MeshStandardMaterial({ color: "#74543b", roughness: .62, metalness: .04, roughnessMap: woodVariation, bumpMap: woodVariation, bumpScale: .018 });
-    const baseMat = new THREE.MeshStandardMaterial({ color: "#403225", metalness: .48, roughness: .4, roughnessMap: wallVariation });
+    const woodMat = new THREE.MeshStandardMaterial({ color: "#74543b", roughness: .68, metalness: 0, roughnessMap: woodVariation, bumpMap: woodVariation, bumpScale: .012 });
+    const baseMat = new THREE.MeshStandardMaterial({ color: "#403225", metalness: .65, roughness: .48, roughnessMap: wallVariation });
+    const recessMat = new THREE.MeshStandardMaterial({ color: "#9b8c79", roughness: .9, metalness: 0, map: plasterMap, bumpMap: plasterBump, bumpScale: .012 });
+    materials.add(recessMat);
     const topMat = new THREE.MeshStandardMaterial({ color: "#6a563f", metalness: .58, roughness: .34 });
     const trimMat = new THREE.MeshStandardMaterial({ color: "#a7845d", emissive: "#60462c", emissiveIntensity: .16, metalness: .66, roughness: .38 });
     const frameMat = new THREE.MeshStandardMaterial({ color: "#5c4a39", metalness: .56, roughness: .42 });
     const downlightMat = new THREE.MeshStandardMaterial({ color: "#e8d3b5", emissive: "#ffe3ba", emissiveIntensity: 1.2, roughness: .5 });
+    const wallStripMat = downlightMat.clone();
+    wallStripMat.emissiveIntensity = .12;
+    materials.add(wallStripMat);
     [wallMat, featureWallMat, ceilingMat, woodMat, baseMat, topMat, trimMat, frameMat, downlightMat].forEach(m => materials.add(m));
     function box(w: number, h: number, d: number, x: number, y: number, z: number, material: THREE.Material) {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
@@ -206,30 +258,38 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
     }
     const floorMat = new THREE.MeshPhysicalMaterial({
       color: "#716961",
-      roughness: .34,
-      metalness: .16,
-      clearcoat: .3,
-      clearcoatRoughness: .5,
+      roughness: .58,
+      metalness: 0,
+      clearcoat: .12,
+      clearcoatRoughness: .65,
       roughnessMap: floorVariation,
       bumpMap: floorVariation,
-      bumpScale: .009,
+      bumpScale: .004,
     });
     materials.add(floorMat);
-    box(26, .2, 21, 0, -.12, .5, floorMat);
-    box(21, 7.45, .25, 0, 3.6, -7.4, wallMat);
-    box(.25, 7.45, 14.5, -10.5, 3.6, -.15, wallMat);
-    box(.25, 7.45, 14.5, 10.5, 3.6, -.15, wallMat);
-    box(21, .2, 15, 0, 7.35, .1, ceilingMat);
-    box(11.5, 5.9, .1, 0, 3.55, -7.23, featureWallMat);
-    [-8.25, 8.25].forEach(x => box(2.25, 6.2, .2, x, 3.55, -7.08, woodMat));
-    [-9.05, -8.5, -7.95, -7.4, 7.4, 7.95, 8.5, 9.05].forEach(x => box(.035, 5.85, .04, x, 3.55, -6.95, frameMat));
-    box(18.8, .035, .075, 0, 6.62, -6.94, trimMat);
-    box(18.8, .02, .075, 0, .38, -6.94, trimMat);
-    [-5.75, 5.75].forEach(x => box(.045, 5.9, .05, x, 3.55, -7.02, trimMat));
-    [-9.75, 9.75].forEach(x => box(.055, 6.2, .055, x, 3.6, -6.85, downlightMat));
-    box(14.4, .18, 1.05, 0, 7.18, -6.45, ceilingMat);
-    [-9.25, 9.25].forEach(x => box(.18, .16, 10.5, x, 7.18, -.95, ceilingMat));
-    [-6.6, -2.2, 2.2, 6.6].forEach(x => box(2.45, .035, .09, x, 7.15, -4.3, downlightMat));
+    box(30, .2, 29, 0, -.12, -1.5, floorMat);
+    box(26, 9.4, .25, 0, 4.55, -12, wallMat);
+    box(.25, 9.4, 25, -13, 4.55, .5, wallMat);
+    box(.25, 9.4, 25, 13, 4.55, .5, wallMat);
+    box(26, .2, 25, 0, 9.25, .5, ceilingMat);
+    // The wall is built around an opening, with a recessed back and plaster returns.
+    box(14, 4.8, .34, 0, 3.1, -11.82, featureWallMat);
+    box(14, .25, .34, 0, 8.125, -11.82, featureWallMat);
+    [-5.65, 5.65].forEach(x => box(2.7, 2.5, .34, x, 6.75, -11.82, featureWallMat));
+    box(8.6, 2.5, .025, 0, 6.75, -11.85, recessMat);
+    [-4.3, 4.3].forEach(x => box(.09, 2.5, .5, x, 6.75, -11.62, featureWallMat));
+    box(8.6, .09, .5, 0, 8, -11.62, featureWallMat);
+    const exhibitSill = box(8.9, .12, .58, 0, 5.5, -11.6, featureWallMat);
+    exhibitSill.castShadow = true;
+    [-10.2, 10.2].forEach(x => box(2.25, 7.7, .2, x, 4.4, -11.68, woodMat));
+    [-11, -10.45, -9.9, -9.35, 9.35, 9.9, 10.45, 11].forEach(x => box(.035, 7.35, .04, x, 4.4, -11.55, frameMat));
+    box(23.4, .035, .075, 0, 8.4, -11.54, trimMat);
+    box(23.4, .02, .075, 0, .38, -11.54, trimMat);
+    [-7, 7].forEach(x => box(.045, 7.4, .05, x, 4.4, -11.62, trimMat));
+    [-12, 12].forEach(x => box(.022, 7.7, .025, x, 4.45, -11.58, wallStripMat));
+    box(18, .18, 1.05, 0, 9.08, -11.05, ceilingMat);
+    [-11.5, 11.5].forEach(x => box(.18, .16, 22, x, 9.08, .5, ceilingMat));
+    [-8.4, -2.8, 2.8, 8.4].forEach(x => box(2.45, .035, .09, x, 9.05, -7.5, downlightMat));
 
     const displaySlots = [[0, -1], ...surrounding];
     displaySlots.forEach(([x, z], index) => {
@@ -238,7 +298,7 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
       spot.target.position.set(x, 1.05, z);
       scene.add(spot, spot.target);
       const fixture = new THREE.Mesh(new THREE.CylinderGeometry(.11, .11, .035, 24), downlightMat);
-      fixture.position.set(x, 7.2, z + .2);
+      fixture.position.set(x, 9.1, z + .2);
       scene.add(fixture);
     });
     const wallTitle = labelTexture("MY HOT WHEELS NFTS", "", true);
@@ -246,7 +306,7 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
     const titleMat = new THREE.MeshBasicMaterial({ map: wallTitle, transparent: true, toneMapped: false });
     materials.add(titleMat);
     const title = new THREE.Mesh(new THREE.PlaneGeometry(7.2, .9), titleMat);
-    title.position.set(0, 6.5, -6.82);
+    title.position.set(0, 7.6, -11.42);
     scene.add(title);
 
     const loader = new THREE.TextureLoader();
@@ -361,6 +421,7 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
       const groundContact = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 2.3), contactMat);
       groundContact.rotation.x = -Math.PI / 2;
       groundContact.position.y = .002;
+      groundContact.scale.setScalar(1.12);
       group.add(groundContact);
       const card = makeCard();
       const cardBaseY = .1 + originalHeight + 1.28;
@@ -372,8 +433,12 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect }: {
       // Three quieter, repeated highlights; these are not additional owned NFTs.
       if (index < 3) {
         const wallCard = makeCard();
-        wallCard.position.set((index - 1) * 1.85, 5.58, -6.78);
-        wallCard.scale.setScalar(.46);
+        wallCard.position.set((index - 1) * 2.25, 6.45, -11.38);
+        wallCard.scale.setScalar(.7);
+        wallCard.traverse(child => { child.castShadow = false; });
+        const wallContact = new THREE.Mesh(new THREE.PlaneGeometry(1.35, 1.85), contactMat);
+        wallContact.position.set(wallCard.position.x, wallCard.position.y, -11.83);
+        scene.add(wallContact);
         scene.add(wallCard);
       }
       updateRatio(7, 10);
