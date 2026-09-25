@@ -148,7 +148,27 @@ function schedule() {
     syncPlayback();
   });
 }
+function promoteStillToImage(entry: Entry) {
+  if (!entry.state.still || entry.imageStatus === "ready") {
+    return;
+  }
 
+  const image = new Image();
+
+  image.onload = () => {
+    if (entry.disposed || entry.imageStatus === "ready") {
+      return;
+    }
+
+    entry.state.image = image;
+    entry.imageStatus = "ready";
+
+    notify(entry);
+    schedule();
+  };
+
+  image.src = entry.state.still;
+}
 function loadImage(entry: Entry) {
   entry.imageStatus = "loading";
 
@@ -163,7 +183,7 @@ function loadImage(entry: Entry) {
 
   image.onload = () => {
     if (entry.disposed) return;
-
+entry.state.image = image;
     entry.imageStatus = "ready";
 
     notify(entry);
@@ -172,6 +192,9 @@ function loadImage(entry: Entry) {
 
   image.onerror = () => {
     if (entry.disposed) return;
+  if (entry.imageStatus === "ready" && entry.state.still) {
+    return;
+  }
 
     entry.imageStatus = "failed";
     entry.state.image = null;
@@ -226,6 +249,7 @@ function loadVideo(entry: Entry) {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       entry.state.still = canvas.toDataURL("image/jpeg", 0.88);
+      promoteStillToImage(entry);
     } catch {
       /*
        * If snapshot generation fails,
