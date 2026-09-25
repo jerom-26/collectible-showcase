@@ -438,18 +438,28 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect, mediaAc
       let unavailableTexture: THREE.Texture | undefined;
       const featured = index === selectedRef.current;
       const visible = featured || index < (selectedRef.current < 7 ? 7 : 6);
-      mediaHandles.push(acquireMedia(asset, { priority: featured ? 0 : visible ? 1 : 2, animate: activeRef.current && visible }, media => {
+      mediaHandles.push(acquireMedia(asset, { priority: featured ? 0 : visible ? 1 : 2, animate: activeRef.current && featured }, media => {
         if (disposed) return;
         if (media.image && !imageTexture) {
           imageTexture = new THREE.Texture(media.image);
           imageTexture.needsUpdate = true;
           textures.add(imageTexture);
         }
-        if (media.videoReady && media.video) {
-          videoTexture ??= new THREE.VideoTexture(media.video);
-          updateRatio(media.video.videoWidth, media.video.videoHeight);
-          applyTexture(videoTexture);
-        } else if (imageTexture && media.image) {
+        const shouldAnimate =
+  activeRef.current &&
+  index === selectedRef.current;
+
+if (shouldAnimate && media.videoReady && media.video) {
+  videoTexture ??= new THREE.VideoTexture(media.video);
+
+  updateRatio(
+    media.video.videoWidth,
+    media.video.videoHeight
+  );
+
+  applyTexture(videoTexture);
+
+} else if (imageTexture && media.image) {
           updateRatio(media.image.naturalWidth, media.image.naturalHeight);
           applyTexture(imageTexture);
         } else if (media.failed && !videoTexture) {
@@ -470,7 +480,7 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect, mediaAc
         // room displays the selected item and the first six other collectibles.
         const position = featured ? [0, -1] : surrounding[slot++];
           display.group.visible = !!position;
-          mediaHandles[display.index].update({ priority: featured ? 0 : position || display.index < 3 ? 1 : 2, animate: activeRef.current && (!!position || display.index < 3) });
+          mediaHandles[display.index].update({ priority: featured ? 0 : position || display.index < 3 ? 1 : 2, animate: activeRef.current && featured });
         if (position) {
           display.target.set(position[0], 0, position[1]);
           display.size = featured ? 1.2 : .78;

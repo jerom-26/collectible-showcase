@@ -32,59 +32,47 @@ let scheduled = false;
 let removeListeners: (() => void) | undefined;
 
 const priority = (entry: Entry) =>
-  Math.min(...Array.from(entry.consumers, c => c.priority));
+  Math.min(...Array.from(entry.consumers, (c) => c.priority));
 
 const wantsAnimation = (entry: Entry) =>
-  Array.from(entry.consumers).some(c => c.animate);
+  Array.from(entry.consumers).some((c) => c.animate);
 
 function notify(entry: Entry) {
   entry.state.failed =
-    entry.imageStatus === "failed" &&
-    entry.videoStatus === "failed";
+    entry.imageStatus === "failed" && entry.videoStatus === "failed";
 
-  entry.consumers.forEach(c => {
+  entry.consumers.forEach((c) => {
     c.notify({ ...entry.state });
   });
 }
 
 function syncPlayback() {
-  const reduced = matchMedia(
-    "(prefers-reduced-motion: reduce)"
-  ).matches;
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  const limit = matchMedia("(max-width: 760px)").matches
-    ? 2
-    : 7;
+  const featuredEntry = Array.from(entries.values())
+    .filter((entry) => entry.state.videoReady && wantsAnimation(entry))
+    .sort((a, b) => priority(a) - priority(b))[0];
 
-  const playing = Array.from(entries.values())
-    .filter(
-      entry =>
-        entry.state.videoReady &&
-        wantsAnimation(entry)
-    )
-    .sort(
-      (a, b) =>
-        priority(a) - priority(b)
-    )
-    .slice(0, limit);
-
-  entries.forEach(entry => {
+  entries.forEach((entry) => {
     const video = entry.state.video;
 
     if (!video) return;
 
-    if (
-      document.hidden ||
-      reduced ||
-      !playing.includes(entry)
-    ) {
+    const shouldPlay = !document.hidden && !reduced && entry === featuredEntry;
+
+    if (!shouldPlay) {
       video.pause();
       return;
     }
 
+    video.muted = true;
+    video.defaultMuted = true;
+    video.loop = true;
+    video.playsInline = true;
+
     if (video.paused) {
       void video.play().catch(() => {
-
+        // Static image stays visible if autoplay fails.
       });
     }
   });
@@ -98,11 +86,9 @@ function schedule() {
   queueMicrotask(() => {
     scheduled = false;
 
-    const ordered = Array.from(entries.values())
-      .sort(
-        (a, b) =>
-          priority(a) - priority(b)
-      );
+    const ordered = Array.from(entries.values()).sort(
+      (a, b) => priority(a) - priority(b),
+    );
 
     for (const entry of ordered) {
       if (entry.imageStatus === "queued") {
@@ -111,36 +97,28 @@ function schedule() {
     }
 
     let videos = ordered.filter(
-      entry =>
-        entry.videoStatus === "loading"
+      (entry) => entry.videoStatus === "loading",
     ).length;
 
     if (
       videos >= 2 &&
       ordered.some(
-        entry =>
+        (entry) =>
           priority(entry) === 0 &&
           wantsAnimation(entry) &&
-          entry.videoStatus === "queued"
+          entry.videoStatus === "queued",
       )
     ) {
       const background = ordered
         .slice()
         .reverse()
         .find(
-          entry =>
-            entry.videoStatus === "loading" &&
-            priority(entry) > 0
+          (entry) => entry.videoStatus === "loading" && priority(entry) > 0,
         );
 
-      const video =
-        background?.state.video;
+      const video = background?.state.video;
 
-      if (
-        background &&
-        video
-      ) {
-        video.onloadeddata = null;
+      if (background && video) {
         video.oncanplay = null;
         video.onerror = null;
 
@@ -160,10 +138,7 @@ function schedule() {
       if (
         entry.videoStatus === "queued" &&
         videos < 2 &&
-        (
-          wantsAnimation(entry) ||
-          entry.imageStatus === "failed"
-        )
+        (wantsAnimation(entry) || entry.imageStatus === "failed")
       ) {
         videos++;
         loadVideo(entry);
@@ -184,10 +159,7 @@ function loadImage(entry: Entry) {
   image.crossOrigin = "anonymous";
   image.decoding = "async";
 
-  image.fetchPriority =
-    priority(entry) === 0
-      ? "high"
-      : "auto";
+  image.fetchPriority = priority(entry) === 0 ? "high" : "auto";
 
   image.onload = () => {
     if (entry.disposed) return;
@@ -214,8 +186,7 @@ function loadImage(entry: Entry) {
 function loadVideo(entry: Entry) {
   entry.videoStatus = "loading";
 
-  const video =
-    document.createElement("video");
+  const video = document.createElement("video");
 
   entry.state.video = video;
 
@@ -226,55 +197,35 @@ function loadVideo(entry: Entry) {
   video.loop = true;
   video.preload = "auto";
 
-  video.setAttribute(
-    "aria-label",
-    `${entry.asset.name} NFT artwork`
-  );
+  video.setAttribute("aria-label", `${entry.asset.name} NFT artwork`);
 
   const ready = () => {
     if (
       entry.disposed ||
       entry.state.videoReady ||
-      video.readyState < 2 ||
+      video.readyState < 3 ||
       !video.videoWidth ||
       !video.videoHeight
     ) {
       return;
     }
 
-    const canvas =
-      document.createElement("canvas");
+    const canvas = document.createElement("canvas");
 
-    canvas.width = Math.min(
-      640,
-      video.videoWidth
-    );
+    canvas.width = Math.min(640, video.videoWidth);
 
     canvas.height = Math.round(
-      canvas.width *
-        video.videoHeight /
-        video.videoWidth
+      (canvas.width * video.videoHeight) / video.videoWidth,
     );
 
     try {
-      const ctx =
-        canvas.getContext("2d");
+      const ctx = canvas.getContext("2d");
 
       if (!ctx) return;
 
-      ctx.drawImage(
-        video,
-        0,
-        0,
-        canvas.width,
-        canvas.height
-      );
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      entry.state.still =
-        canvas.toDataURL(
-          "image/jpeg",
-          0.88
-        );
+      entry.state.still = canvas.toDataURL("image/jpeg", 0.88);
     } catch {
       /*
        * If snapshot generation fails,
@@ -286,10 +237,10 @@ function loadVideo(entry: Entry) {
     entry.state.videoReady = true;
 
     notify(entry);
+    syncPlayback();
     schedule();
   };
 
-  video.onloadeddata = ready;
   video.oncanplay = ready;
 
   video.onerror = () => {
@@ -298,14 +249,12 @@ function loadVideo(entry: Entry) {
     entry.videoStatus = "failed";
     entry.state.videoReady = false;
 
-  
     notify(entry);
     schedule();
   };
 
   video.src = entry.asset.videoUrl!;
   video.load();
-
 }
 
 export function acquireMedia(
@@ -314,13 +263,11 @@ export function acquireMedia(
     priority: number;
     animate: boolean;
   },
-  notifyState: Consumer["notify"]
+  notifyState: Consumer["notify"],
 ) {
-  const key =
-    `${asset.assetId}|${asset.imageUrl}|${asset.videoUrl}`;
+  const key = `${asset.assetId}|${asset.imageUrl}|${asset.videoUrl}`;
 
-  let entry =
-    entries.get(key);
+  let entry = entries.get(key);
 
   if (!entry) {
     entry = {
@@ -329,31 +276,20 @@ export function acquireMedia(
       consumers: new Set(),
       disposed: false,
 
-      imageStatus:
-        asset.imageUrl
-          ? "queued"
-          : "failed",
+      imageStatus: asset.imageUrl ? "queued" : "failed",
 
-      videoStatus:
-        asset.videoUrl
-          ? "queued"
-          : "failed",
+      videoStatus: asset.videoUrl ? "queued" : "failed",
 
       state: {
         image: null,
         video: null,
         videoReady: false,
         still: null,
-        failed:
-          !asset.imageUrl &&
-          !asset.videoUrl,
+        failed: !asset.imageUrl && !asset.videoUrl,
       },
     };
 
-    entries.set(
-      key,
-      entry
-    );
+    entries.set(key, entry);
   }
 
   const current = entry;
@@ -361,111 +297,67 @@ export function acquireMedia(
   const consumer: Consumer = {
     ...options,
 
-    notify: state =>
+    notify: (state) =>
       notifyState({
         ...state,
 
-        image:
-          current.imageStatus === "ready"
-            ? state.image
-            : null,
+        image: current.imageStatus === "ready" ? state.image : null,
       }),
   };
 
-  current.consumers.add(
-    consumer
-  );
+  current.consumers.add(consumer);
 
-  consumer.notify(
-    current.state
-  );
+  consumer.notify(current.state);
 
   if (!removeListeners) {
-    const motion =
-      matchMedia(
-        "(prefers-reduced-motion: reduce)"
-      );
+    const motion = matchMedia("(prefers-reduced-motion: reduce)");
 
-    const mobile =
-      matchMedia(
-        "(max-width: 760px)"
-      );
+    const mobile = matchMedia("(max-width: 760px)");
 
-    motion.addEventListener(
-      "change",
-      syncPlayback
-    );
+    motion.addEventListener("change", syncPlayback);
 
-    mobile.addEventListener(
-      "change",
-      syncPlayback
-    );
+    mobile.addEventListener("change", syncPlayback);
 
-    document.addEventListener(
-      "visibilitychange",
-      syncPlayback
-    );
+    document.addEventListener("visibilitychange", syncPlayback);
 
     removeListeners = () => {
-      motion.removeEventListener(
-        "change",
-        syncPlayback
-      );
+      motion.removeEventListener("change", syncPlayback);
 
-      mobile.removeEventListener(
-        "change",
-        syncPlayback
-      );
+      mobile.removeEventListener("change", syncPlayback);
 
-      document.removeEventListener(
-        "visibilitychange",
-        syncPlayback
-      );
+      document.removeEventListener("visibilitychange", syncPlayback);
     };
   }
 
   schedule();
 
   return {
-    update(options: {
-      priority: number;
-      animate: boolean;
-    }) {
-      Object.assign(
-        consumer,
-        options
-      );
+    update(options: { priority: number; animate: boolean }) {
+      Object.assign(consumer, options);
 
+      consumer.notify(current.state);
+      syncPlayback();
       schedule();
     },
 
     release() {
-      current.consumers.delete(
-        consumer
-      );
+      current.consumers.delete(consumer);
 
       queueMicrotask(() => {
-        if (
-          current.consumers.size
-        ) {
+        if (current.consumers.size) {
           return;
         }
 
         current.disposed = true;
 
-        if (
-          current.state.image
-        ) {
+        if (current.state.image) {
           current.state.image.onload = null;
           current.state.image.onerror = null;
 
-          current.state.image.removeAttribute(
-            "src"
-          );
+          current.state.image.removeAttribute("src");
         }
 
-        const video =
-          current.state.video;
+        const video = current.state.video;
 
         if (video) {
           video.onloadeddata = null;
@@ -473,16 +365,12 @@ export function acquireMedia(
           video.onerror = null;
 
           video.pause();
-          video.removeAttribute(
-            "src"
-          );
+          video.removeAttribute("src");
           video.load();
           video.remove();
         }
 
-        entries.delete(
-          key
-        );
+        entries.delete(key);
 
         if (!entries.size) {
           removeListeners?.();
