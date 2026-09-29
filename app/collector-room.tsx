@@ -435,6 +435,7 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect, mediaAc
       updateRatio(7, 10);
       let imageTexture: THREE.Texture | undefined;
       let videoTexture: THREE.VideoTexture | undefined;
+      let videoSource: HTMLVideoElement | null = null;
       let unavailableTexture: THREE.Texture | undefined;
       const featured = index === selectedRef.current;
       const visible = featured || index < (selectedRef.current < 7 ? 7 : 6);
@@ -450,14 +451,21 @@ export default function CollectorRoom({ assets, selectedIndex, onSelect, mediaAc
   index === selectedRef.current;
 
 if (shouldAnimate && media.videoReady && media.video) {
-  videoTexture ??= new THREE.VideoTexture(media.video);
+  if (videoSource !== media.video) {
+    if (videoTexture) {
+      textures.delete(videoTexture);
+      videoTexture.dispose();
+    }
+    videoSource = media.video;
+    videoTexture = new THREE.VideoTexture(media.video);
+  }
 
   updateRatio(
     media.video.videoWidth,
     media.video.videoHeight
   );
 
-  applyTexture(videoTexture);
+  applyTexture(videoTexture!);
 
 } else if (imageTexture && media.image) {
           updateRatio(media.image.naturalWidth, media.image.naturalHeight);

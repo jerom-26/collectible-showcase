@@ -1,109 +1,206 @@
-import { readFileSync } from 'node:fs';
-import assert from 'node:assert/strict';
-import { transpileModule, ModuleKind } from 'typescript';
+import { readFileSync } from "node:fs";
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { transpileModule, ModuleKind } from "typescript";
 
-// Exercise the resource scheduler with deterministic media events (no gateway).
-const images = [], videos = [];
-let mobile = true, reduced = false;
-globalThis.matchMedia = query => ({ matches: query.includes('reduced-motion') ? reduced : mobile, addEventListener() {}, removeEventListener() {} });
-globalThis.Image = class {
-  constructor() { images.push(this); }
-  removeAttribute() {}
-};
-globalThis.document = {
-  hidden: false, addEventListener() {}, removeEventListener() {},
-  createElement(tag) {
-    if (tag === 'canvas') return { getContext: () => ({ drawImage() {} }), toDataURL: () => 'data:image/jpeg;base64,frame' };
-    const video = { paused: true, readyState: 0, videoWidth: 0, videoHeight: 0,
-      setAttribute() {}, removeAttribute() {}, load() {}, remove() {},
-      pause() { this.paused = true; }, play() { this.paused = false; return Promise.resolve(); } };
-    videos.push(video);
-    return video;
-  },
-};
-const source = readFileSync(new URL('../lib/nft-media.ts', import.meta.url), 'utf8');
+const source = readFileSync(new URL("../lib/nft-media.ts", import.meta.url), "utf8");
 const { outputText } = transpileModule(source, { compilerOptions: { module: ModuleKind.ESNext, target: 9 } });
-const { acquireMedia } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
-const tick = async () => { await Promise.resolve(); await Promise.resolve(); };
-const asset = id => ({ assetId: id, name: id, imageUrl: `https://gateway.test/${id}.jpg`, videoUrl: `https://gateway.test/${id}.mp4` });
-const frame = video => { video.readyState = 2; video.videoWidth = 700; video.videoHeight = 1000; video.onloadeddata?.(); };
+let moduleId = 0;
+const asset = (id, image = true) => ({ assetId: id, name: id, imageUrl: image ? `https://media.test/${id}.jpg` : null, videoUrl: `https://media.test/${id}.mp4` });
+const tick = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 
-let state;
-const item = asset('featured');
-const room = acquireMedia(item, { priority: 0, animate: true }, next => { state = next; });
-const detail = acquireMedia(item, { priority: 0, animate: true }, () => {});
-const thumb = acquireMedia(item, { priority: 2, animate: false }, () => {});
-await tick();
-assert.equal(images.length, 1);
-assert.equal(videos.length, 1, 'room and details share one decoder');
-assert.equal(state.failed, false, 'pending is not failure');
-images[0].onload();
-assert.equal(state.image, images[0], 'image is available before video');
-assert.equal(state.videoReady, false);
-videos[0].onloadeddata();
-assert.equal(state.videoReady, false, 'metadata/empty frame must not replace image');
-frame(videos[0]);
-await tick();
-assert.equal(state.videoReady, true);
-assert.equal(state.image, images[0], 'poster retained after video arrives');
-assert.equal(videos[0].paused, false);
-videos[0].onerror();
-assert.equal(state.failed, false, 'video error retains successful image');
-assert.equal(state.videoReady, false);
-room.release(); detail.release(); thumb.release(); await tick();
+async function harness(t, storage = new Map()) {
+  const images = [], videos = [], timers = new Map(), handles = [];
+  let timerId = 0;
+  const flags = { reduced: false, canvas: true, storage: true };
+  const globals = ["Image", "document", "matchMedia", "sessionStorage", "setTimeout", "clearTimeout"];
+  const original = new Map(globals.map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  globalThis.setTimeout = (callback, delay) => { const id = ++timerId; timers.set(id, { callback, delay }); return id; };
+  globalThis.clearTimeout = id => timers.delete(id);
+  globalThis.matchMedia = () => ({ matches: flags.reduced, addEventListener() {}, removeEventListener() {} });
+  Object.defineProperty(globalThis, "sessionStorage", { configurable: true, value: {
+    getItem: key => storage.get(key),
+    setItem: (key, value) => { if (!flags.storage) throw new Error("Quota exceeded"); storage.set(key, value); },
+  } });
+  globalThis.Image = class {
+    constructor() { images.push(this); }
+    set src(value) { this.url = value; if (value.startsWith("data:")) queueMicrotask(() => this.onload?.()); }
+    get src() { return this.url; }
+    removeAttribute() { this.url = ""; }
+  };
+  globalThis.document = {
+    hidden: false, addEventListener() {}, removeEventListener() {},
+    createElement(tag) {
+      if (tag === "canvas") return { getContext: () => flags.canvas ? { drawImage() {} } : null, toDataURL: () => "data:image/jpeg;base64,frame" };
+      const video = { paused: true, readyState: 0, videoWidth: 0, videoHeight: 0,
+        setAttribute() {}, removeAttribute() { this.src = ""; }, load() {}, remove() {},
+        pause() { this.paused = true; }, play() { this.paused = false; return Promise.resolve(); } };
+      videos.push(video);
+      return video;
+    },
+  };
+  const { acquireMedia } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}#${moduleId++}`);
+  t.after(async () => {
+    handles.forEach(handle => handle.release());
+    await tick();
+    const outstanding = timers.size;
+    for (const [key, descriptor] of original) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete globalThis[key];
+    }
+    assert.equal(outstanding, 0, "unmount clears all request deadlines");
+  });
+  return {
+    images, videos, timers, flags, storage,
+    acquire(item, options = { priority: 2, animate: false }) {
+      let state;
+      const handle = acquireMedia(item, options, next => { state = next; });
+      handles.push(handle);
+      return { handle, get state() { return state; } };
+    },
+    frame(video) { Object.assign(video, { readyState: 2, videoWidth: 700, videoHeight: 1000 }); video.onloadeddata?.(); },
+    expire(delay) {
+      const timer = [...timers.entries()].find(([, value]) => value.delay === delay);
+      assert.ok(timer, `expected ${delay}ms deadline`);
+      timers.delete(timer[0]); timer[1].callback();
+    },
+  };
+}
 
-let fallback;
-const broken = acquireMedia(asset('fallback'), { priority: 2, animate: false }, next => { fallback = next; });
-await tick();
-const before = videos.length;
-assert.equal(before, 1, 'static thumbnails do not load video');
-images.at(-1).onerror(); await tick();
-assert.equal(fallback.failed, false, 'image failure waits for video fallback');
-frame(videos.at(-1)); await tick();
-assert.ok(fallback.still, 'video-only fallback supplies static thumbnail');
-assert.equal(videos.at(-1).paused, true);
-broken.release(); await tick();
+test("seven posters load without downloading seven videos; the featured animation starts after its poster", async t => {
+  const h = await harness(t);
+  const items = Array.from({ length: 7 }, (_, i) => h.acquire(asset(String(i)), { priority: i ? 1 : 0, animate: i === 0 }));
+  await tick();
+  assert.equal(h.images.length, 4);
+  assert.equal(h.videos.length, 0);
+  for (let i = 0; i < 7; i++) { h.images[i].onload(); await tick(); }
+  assert.ok(items.every(item => item.state.image));
+  assert.equal(h.videos.length, 1, "only the selected NFT downloads a video");
+  assert.equal(items[0].state.videoReady, false);
+  h.frame(h.videos[0]); await tick();
+  assert.equal(items[0].state.videoReady, true);
+  h.videos[0].onerror(); await tick();
+  assert.ok(items[0].state.image, "playback failure preserves the poster");
+  assert.equal(items[0].state.failed, false);
+});
 
-let failed;
-const both = acquireMedia(asset('both-fail'), { priority: 0, animate: true }, next => { failed = next; });
-await tick();
-images.at(-1).onerror();
-assert.equal(failed.failed, false);
-videos.at(-1).onerror();
-assert.equal(failed.failed, true, 'unavailable only after both fail');
-both.release(); await tick();
+test("video-only thumbnails capture the first frame and stop background transfers", async t => {
+  const h = await harness(t);
+  const items = Array.from({ length: 7 }, (_, i) => h.acquire(asset(`video-${i}`, false)));
+  await tick();
+  assert.equal(h.videos.length, 2);
+  h.videos[0].onloadeddata();
+  assert.equal(items[0].state.image, null, "metadata alone is insufficient");
+  h.frame(h.videos[0]); await tick();
+  assert.ok(items[0].state.image, "HAVE_CURRENT_DATA supplies a thumbnail before canplay");
+  assert.equal(h.videos[0].src, "", "thumbnail extraction cancels the remaining transfer");
+  assert.equal(h.videos.length, 3, "the next thumbnail starts immediately");
+  assert.ok(h.storage.get("nft-posters-v1"));
+});
 
-const orderStart = images.length;
-const handles = Array.from({ length: 8 }, (_, i) => acquireMedia(asset(`queue-${i}`), { priority: i === 7 ? 0 : i < 6 ? 1 : 2, animate: i !== 6 }, () => {}));
-await tick();
-assert.equal(images[orderStart].src, 'https://gateway.test/queue-7.jpg', 'featured image starts first');
-assert.equal(images.length - orderStart, 4, 'image concurrency bounded');
-assert.equal(videos.at(-2).src, 'https://gateway.test/queue-7.mp4', 'featured video starts first');
-const initialVideos = videos.length;
-assert.equal(videos.at(-1).src, 'https://gateway.test/queue-0.mp4');
-frame(videos.at(-2)); frame(videos.at(-1)); await tick();
-assert.ok(videos.length > initialVideos, 'next visible videos start after first frames');
-frame(videos.at(-2)); frame(videos.at(-1)); await tick();
-assert.ok(videos.filter(v => !v.paused).length <= 2, 'phone playback capped at two');
-handles.forEach(h => h.release()); await tick();
-assert.equal(videos.filter(v => !v.paused).length, 0, 'cleanup pauses every decoder');
+test("a stalled video frees its queue slot and late events are ignored", async t => {
+  const h = await harness(t);
+  const first = h.acquire(asset("stalled", false));
+  h.acquire(asset("second", false)); h.acquire(asset("third", false));
+  await tick();
+  const lateFrame = h.videos[0].onloadeddata;
+  h.expire(20_000); await tick();
+  assert.equal(first.state.failed, true);
+  assert.equal(h.videos.length, 3);
+  Object.assign(h.videos[0], { readyState: 2, videoWidth: 700, videoHeight: 1000 });
+  lateFrame(); await tick();
+  assert.equal(first.state.failed, true);
+  assert.equal(first.state.image, null);
+});
 
-const slowA = acquireMedia(asset('slow-a'), { priority: 1, animate: true }, () => {});
-const slowB = acquireMedia(asset('slow-b'), { priority: 1, animate: true }, () => {});
-await tick();
-let urgent;
-const selected = acquireMedia(asset('new-selection'), { priority: 0, animate: true }, next => { urgent = next; });
-await tick();
-assert.equal(videos.at(-1).src, 'https://gateway.test/new-selection.mp4', 'selection preempts a slow background download');
-assert.equal(urgent.failed, false, 'a slow image or video never triggers unavailability');
-frame(videos.at(-1)); await tick();
-reduced = true;
-selected.update({ priority: 0, animate: true }); await tick();
-assert.equal(videos.filter(v => !v.paused).length, 0, 'reduced motion pauses playback');
-reduced = false;
-document.hidden = true;
-selected.update({ priority: 0, animate: true }); await tick();
-assert.equal(videos.filter(v => !v.paused).length, 0, 'background tab pauses playback');
-slowA.release(); slowB.release(); selected.release(); await tick();
-document.hidden = false;
-console.log('NFT media tests passed: poster-first, deduplication, failure recovery, priority, concurrency, phone playback, cleanup.');
+test("image requests respect priority and stalled images fall back to video", async t => {
+  const h = await harness(t);
+  for (let i = 0; i < 8; i++) h.acquire(asset(`image-${i}`), { priority: i === 7 ? 0 : 2, animate: false });
+  await tick();
+  assert.equal(h.images.length, 4);
+  assert.equal(h.images[0].src, "https://media.test/image-7.jpg");
+  h.expire(15_000); await tick();
+  assert.equal(h.images.length, 5);
+  assert.equal(h.videos[0].src, "https://media.test/image-7.mp4");
+});
+
+test("different mints share one media request and stay alive until the last consumer releases", async t => {
+  const h = await harness(t);
+  const first = h.acquire(asset("shared"));
+  const second = h.acquire({ ...asset("shared"), assetId: "another-mint" });
+  await tick();
+  assert.equal(h.images.length, 1);
+  first.handle.release(); await tick();
+  h.images[0].onload(); await tick();
+  assert.ok(second.state.image);
+  assert.equal(h.videos.length, 0);
+});
+
+test("new selections preempt a stalled background video", async t => {
+  const h = await harness(t);
+  h.acquire(asset("background-a", false)); h.acquire(asset("background-b", false));
+  await tick();
+  const selected = h.acquire(asset("urgent", false), { priority: 0, animate: true });
+  await tick();
+  assert.equal(h.videos.length, 3);
+  assert.equal(h.videos[1].src, "");
+  assert.equal(h.videos[2].src, "https://media.test/urgent.mp4");
+  h.frame(h.videos[2]); await tick();
+  assert.equal(selected.state.videoReady, true);
+});
+
+test("changing selection stops old video downloads, and revisiting can create a fresh decoder", async t => {
+  const h = await harness(t);
+  const item = h.acquire(asset("switch"), { priority: 0, animate: true });
+  await tick(); h.images[0].onload(); await tick();
+  h.frame(h.videos[0]); await tick();
+  item.handle.update({ priority: 1, animate: false }); await tick();
+  assert.equal(h.videos[0].src, "");
+  assert.ok(item.state.image);
+  item.handle.update({ priority: 0, animate: true }); await tick();
+  assert.equal(h.videos.length, 2);
+  h.frame(h.videos[1]); await tick();
+  assert.equal(item.state.video, h.videos[1]);
+  h.flags.reduced = true; item.handle.update({ priority: 0, animate: true }); await tick();
+  assert.equal(h.videos[1].paused, true);
+  h.flags.reduced = false; document.hidden = true;
+  item.handle.update({ priority: 0, animate: true }); await tick();
+  assert.equal(h.videos[1].paused, true);
+});
+
+test("session-cached posters display without video requests after reload", async t => {
+  const item = asset("cached", false);
+  const storage = new Map([["nft-posters-v1", JSON.stringify([[item.videoUrl, "data:image/jpeg;base64,frame"]])]]);
+  const h = await harness(t, storage);
+  const loaded = h.acquire(item); await tick();
+  assert.ok(loaded.state.image);
+  assert.equal(h.videos.length, 0);
+});
+
+test("storage quota errors do not prevent first-frame thumbnails", async t => {
+  const h = await harness(t);
+  h.flags.storage = false;
+  const item = h.acquire(asset("quota", false)); await tick();
+  h.frame(h.videos[0]); await tick();
+  assert.ok(item.state.image);
+});
+
+test("canvas failure does not leave static thumbnails permanently loading", async t => {
+  const h = await harness(t);
+  h.flags.canvas = false;
+  const item = h.acquire(asset("no-canvas", false)); await tick();
+  h.frame(h.videos[0]); await tick();
+  assert.equal(item.state.failed, true);
+});
+
+test("published poster manifest references small, real JPEG files", () => {
+  const manifest = JSON.parse(readFileSync(new URL("../lib/nft-posters.json", import.meta.url), "utf8"));
+  assert.ok(Object.keys(manifest).length >= 7);
+  for (const [video, path] of Object.entries(manifest)) {
+    assert.ok(video.startsWith("https://"));
+    assert.match(path, /^\/nft-posters\/[a-f0-9]{20}\.jpg$/);
+    const image = readFileSync(new URL(`../public${path}`, import.meta.url));
+    assert.equal(image.readUInt16BE(0), 0xffd8);
+    assert.ok(image.length < 150_000);
+  }
+});

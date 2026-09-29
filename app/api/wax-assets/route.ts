@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { WAX_ACCOUNT } from "@/lib/collection";
+import posters from "@/lib/nft-posters.json";
 
 const ATOMIC_ASSETS_ENDPOINT = "https://wax.api.atomicassets.io/atomicassets/v1/assets";
 const IPFS_GATEWAY = "https://gateway.pinata.cloud/ipfs/";
@@ -83,6 +84,8 @@ export async function GET(request: NextRequest) {
       const template = record(asset.template);
       const immutable = record(template.immutable_data);
       const collection = record(asset.collection);
+      const videoUrl = mediaUrl(firstText(data.video, data.animation_url, immutable.video, immutable.animation_url));
+      const poster = videoUrl ? (posters as Record<string, string>)[videoUrl] : undefined;
 
       return {
         assetId: firstText(asset.asset_id) ?? "unknown",
@@ -98,9 +101,9 @@ export async function GET(request: NextRequest) {
         designer: firstText(data.designer, immutable.designer),
         make: firstText(data.make, immutable.make),
         set: firstText(data.collection, immutable.collection),
-        imageUrl: mediaUrl(firstText(data.img, data.image, immutable.img, immutable.image)),
+        imageUrl: poster ?? mediaUrl(firstText(data.img, data.image, immutable.img, immutable.image)),
         backImageUrl: mediaUrl(firstText(data.backimg, data.back_image, immutable.backimg, immutable.back_image)),
-        videoUrl: mediaUrl(firstText(data.video, data.animation_url, immutable.video, immutable.animation_url)),
+        videoUrl,
       };
     });
 
