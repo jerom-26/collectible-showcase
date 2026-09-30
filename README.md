@@ -4,6 +4,8 @@ A 3D web showroom I built for displaying my Hot Wheels NFTs on WAX.
 
 Instead of viewing the collection as a normal wallet grid or list, the idea was to make it feel more like an actual collection with each collectible displayed inside a 3D room.
 
+<img width="1895" height="912" alt="image" src="https://github.com/user-attachments/assets/1d2e805c-39ee-4598-915d-071b54fb6622" />
+
 ## Live Demo
 
 https://collectible-showcase.itsjj.workers.dev/
