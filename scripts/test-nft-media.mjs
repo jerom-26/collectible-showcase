@@ -134,7 +134,8 @@ async function harness(t, storage = new Map()) {
                 }
               : null,
 
-          toDataURL: () => "data:image/jpeg;base64,frame",
+          toDataURL: () =>
+            "data:image/jpeg;base64,frame",
         };
       }
 
@@ -196,9 +197,9 @@ async function harness(t, storage = new Map()) {
   };
 
   const { acquireMedia } = await import(
-    `data:text/javascript;base64,${Buffer.from(outputText).toString(
-      "base64",
-    )}#${moduleId++}`
+    `data:text/javascript;base64,${
+      Buffer.from(outputText).toString("base64")
+    }#${moduleId++}`,
   );
 
   t.after(async () => {
@@ -212,13 +213,21 @@ async function harness(t, storage = new Map()) {
 
     for (const [key, descriptor] of original) {
       if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
+        Object.defineProperty(
+          globalThis,
+          key,
+          descriptor,
+        );
       } else {
         delete globalThis[key];
       }
     }
 
-    assert.equal(outstanding, 0, "unmount clears all request deadlines");
+    assert.equal(
+      outstanding,
+      0,
+      "unmount clears all request deadlines",
+    );
   });
 
   return {
@@ -237,9 +246,13 @@ async function harness(t, storage = new Map()) {
     ) {
       let state;
 
-      const handle = acquireMedia(item, options, (next) => {
-        state = next;
-      });
+      const handle = acquireMedia(
+        item,
+        options,
+        (next) => {
+          state = next;
+        },
+      );
 
       handles.push(handle);
 
@@ -252,7 +265,7 @@ async function harness(t, storage = new Map()) {
       };
     },
 
-    frame(video, bufferedEnd = 2.5) {
+    frame(video, bufferedEnd = 4.95) {
       Object.assign(video, {
         readyState: 3,
         videoWidth: 700,
@@ -276,7 +289,10 @@ async function harness(t, storage = new Map()) {
         ([, value]) => value.delay === delay,
       );
 
-      assert.ok(timer, `expected ${delay}ms deadline`);
+      assert.ok(
+        timer,
+        `expected ${delay}ms deadline`,
+      );
 
       timers.delete(timer[0]);
 
@@ -285,446 +301,794 @@ async function harness(t, storage = new Map()) {
   };
 }
 
-test("seven posters load without downloading seven videos; the featured animation starts after its poster", async (t) => {
-  const h = await harness(t);
+test(
+  "seven posters load without downloading seven videos; the featured animation starts after its poster",
+  async (t) => {
+    const h = await harness(t);
 
-  const items = Array.from({ length: 7 }, (_, i) =>
-    h.acquire(asset(String(i)), {
-      priority: i ? 1 : 0,
-      animate: i === 0,
-    }),
-  );
-
-  await tick();
-
-  assert.equal(h.images.length, 4);
-
-  assert.equal(h.videos.length, 0);
-
-  for (let i = 0; i < 7; i++) {
-    h.images[i].onload();
+    const items = Array.from(
+      { length: 7 },
+      (_, i) =>
+        h.acquire(
+          asset(String(i)),
+          {
+            priority: i ? 1 : 0,
+            animate: i === 0,
+          },
+        ),
+    );
 
     await tick();
-  }
 
-  assert.ok(items.every((item) => item.state.image));
+    assert.equal(
+      h.images.length,
+      4,
+    );
 
-  assert.equal(h.videos.length, 1, "only the selected NFT downloads a video");
+    assert.equal(
+      h.videos.length,
+      0,
+    );
 
-  assert.equal(items[0].state.videoReady, false);
+    for (let i = 0; i < 7; i++) {
+      h.images[i].onload();
+      await tick();
+    }
 
-  h.frame(h.videos[0], 2.5);
+    assert.ok(
+      items.every((item) => item.state.image),
+    );
 
-  await tick();
+    assert.equal(
+      h.videos.length,
+      1,
+      "only the selected NFT downloads a video",
+    );
 
-  assert.equal(items[0].state.videoReady, true);
+    assert.equal(
+      items[0].state.videoReady,
+      false,
+    );
 
-  h.videos[0].onerror();
+    h.frame(
+      h.videos[0],
+      4.95,
+    );
 
-  await tick();
+    await tick();
 
-  assert.ok(items[0].state.image, "playback failure preserves the poster");
+    assert.equal(
+      items[0].state.videoReady,
+      true,
+    );
 
-  assert.equal(items[0].state.failed, false);
-});
+    h.videos[0].onerror();
 
-test("selected video waits for useful buffering before replacing the poster", async (t) => {
-  const h = await harness(t);
+    await tick();
 
-  const item = h.acquire(asset("buffer-test"), {
-    priority: 0,
-    animate: true,
-  });
+    assert.ok(
+      items[0].state.image,
+      "playback failure preserves the poster",
+    );
 
-  await tick();
+    assert.equal(
+      items[0].state.failed,
+      false,
+    );
+  },
+);
 
-  h.images[0].onload();
+test(
+  "selected video waits for almost the full short clip before replacing the poster",
+  async (t) => {
+    const h = await harness(t);
 
-  await tick();
+    const item = h.acquire(
+      asset("buffer-test"),
+      {
+        priority: 0,
+        animate: true,
+      },
+    );
 
-  assert.equal(h.videos.length, 1);
+    await tick();
 
-  h.frame(h.videos[0], 0.5);
+    h.images[0].onload();
 
-  await tick();
+    await tick();
 
-  assert.equal(
-    item.state.videoReady,
-    false,
-    "a first frame is not enough to expose the video",
-  );
+    assert.equal(
+      h.videos.length,
+      1,
+    );
 
-  assert.ok(item.state.image, "poster remains visible while video buffers");
+    h.frame(
+      h.videos[0],
+      0.5,
+    );
 
-  h.progress(h.videos[0], 2.5);
+    await tick();
 
-  await tick();
+    assert.equal(
+      item.state.videoReady,
+      false,
+      "a first frame is not enough to expose the video",
+    );
 
-  assert.equal(
-    item.state.videoReady,
-    true,
-    "video becomes ready after enough media is buffered",
-  );
-});
+    assert.ok(
+      item.state.image,
+      "poster remains visible while video buffers",
+    );
 
-test("video-only thumbnails capture the first frame and stop background transfers", async (t) => {
-  const h = await harness(t);
+    h.progress(
+      h.videos[0],
+      2.5,
+    );
 
-  const items = Array.from({ length: 7 }, (_, i) =>
-    h.acquire(asset(`video-${i}`, false)),
-  );
+    await tick();
 
-  await tick();
+    assert.equal(
+      item.state.videoReady,
+      false,
+      "half of a short clip is still not enough",
+    );
 
-  assert.equal(h.videos.length, 2);
+    h.progress(
+      h.videos[0],
+      4.95,
+    );
 
-  h.videos[0].onloadeddata();
+    await tick();
 
-  assert.equal(items[0].state.image, null, "metadata alone is insufficient");
+    assert.equal(
+      item.state.videoReady,
+      true,
+      "video becomes ready after almost the entire short clip is buffered",
+    );
+  },
+);
 
-  h.frame(h.videos[0], 2.5);
+test(
+  "video-only thumbnails capture the first frame and stop background transfers",
+  async (t) => {
+    const h = await harness(t);
 
-  await tick();
+    const items = Array.from(
+      { length: 7 },
+      (_, i) =>
+        h.acquire(
+          asset(
+            `video-${i}`,
+            false,
+          ),
+        ),
+    );
 
-  assert.ok(
-    items[0].state.image,
-    "the first usable frame supplies a thumbnail",
-  );
+    await tick();
 
-  assert.equal(
-    h.videos[0].src,
-    "",
-    "thumbnail extraction cancels unnecessary background transfer",
-  );
+    assert.equal(
+      h.videos.length,
+      2,
+    );
 
-  assert.equal(h.videos.length, 3, "the next thumbnail starts immediately");
+    h.videos[0].onloadeddata();
 
-  assert.ok(h.storage.get("nft-posters-v1"));
-});
+    assert.equal(
+      items[0].state.image,
+      null,
+      "metadata alone is insufficient",
+    );
 
-test("a stalled video frees its queue slot and late events are ignored", async (t) => {
-  const h = await harness(t);
+    h.frame(
+      h.videos[0],
+      4.95,
+    );
 
-  const first = h.acquire(asset("stalled", false));
+    await tick();
 
-  h.acquire(asset("second", false));
+    assert.ok(
+      items[0].state.image,
+      "the first usable frame supplies a thumbnail",
+    );
 
-  h.acquire(asset("third", false));
+    assert.equal(
+      h.videos[0].src,
+      "",
+      "thumbnail extraction cancels unnecessary background transfer",
+    );
 
-  await tick();
+    assert.equal(
+      h.videos.length,
+      3,
+      "the next thumbnail starts immediately",
+    );
 
-  const lateFrame = h.videos[0].onloadeddata;
+    assert.ok(
+      h.storage.get("nft-posters-v1"),
+    );
+  },
+);
 
-  h.expire(20_000);
+test(
+  "a stalled video frees its queue slot and late events are ignored",
+  async (t) => {
+    const h = await harness(t);
 
-  await tick();
+    const first = h.acquire(
+      asset(
+        "stalled",
+        false,
+      ),
+    );
 
-  assert.equal(first.state.failed, true);
+    h.acquire(
+      asset(
+        "second",
+        false,
+      ),
+    );
 
-  assert.equal(h.videos.length, 3);
+    h.acquire(
+      asset(
+        "third",
+        false,
+      ),
+    );
 
-  Object.assign(h.videos[0], {
-    readyState: 3,
-    videoWidth: 700,
-    videoHeight: 1000,
-    _bufferedEnd: 2.5,
-  });
+    await tick();
 
-  lateFrame();
+    const lateFrame =
+      h.videos[0].onloadeddata;
 
-  await tick();
+    h.expire(20_000);
 
-  assert.equal(first.state.failed, true);
+    await tick();
 
-  assert.equal(first.state.image, null);
-});
+    assert.equal(
+      first.state.failed,
+      true,
+    );
 
-test("image requests respect priority and stalled images fall back to video", async (t) => {
-  const h = await harness(t);
+    assert.equal(
+      h.videos.length,
+      3,
+    );
 
-  for (let i = 0; i < 8; i++) {
-    h.acquire(asset(`image-${i}`), {
-      priority: i === 7 ? 0 : 2,
+    Object.assign(
+      h.videos[0],
+      {
+        readyState: 3,
+        videoWidth: 700,
+        videoHeight: 1000,
+        duration: 5,
+        _bufferedEnd: 4.95,
+      },
+    );
 
+    lateFrame();
+
+    await tick();
+
+    assert.equal(
+      first.state.failed,
+      true,
+    );
+
+    assert.equal(
+      first.state.image,
+      null,
+    );
+  },
+);
+
+test(
+  "image requests respect priority and stalled images fall back to video",
+  async (t) => {
+    const h = await harness(t);
+
+    for (let i = 0; i < 8; i++) {
+      h.acquire(
+        asset(`image-${i}`),
+        {
+          priority:
+            i === 7
+              ? 0
+              : 2,
+
+          animate: false,
+        },
+      );
+    }
+
+    await tick();
+
+    assert.equal(
+      h.images.length,
+      4,
+    );
+
+    assert.equal(
+      h.images[0].src,
+      "https://media.test/image-7.jpg",
+    );
+
+    h.expire(15_000);
+
+    await tick();
+
+    assert.equal(
+      h.images.length,
+      5,
+    );
+
+    assert.equal(
+      h.videos[0].src,
+      "https://media.test/image-7.mp4",
+    );
+  },
+);
+
+test(
+  "different mints share one media request and stay alive until the last consumer releases",
+  async (t) => {
+    const h = await harness(t);
+
+    const first =
+      h.acquire(
+        asset("shared"),
+      );
+
+    const second =
+      h.acquire({
+        ...asset("shared"),
+        assetId:
+          "another-mint",
+      });
+
+    await tick();
+
+    assert.equal(
+      h.images.length,
+      1,
+    );
+
+    first.handle.release();
+
+    await tick();
+
+    h.images[0].onload();
+
+    await tick();
+
+    assert.ok(
+      second.state.image,
+    );
+
+    assert.equal(
+      h.videos.length,
+      0,
+    );
+  },
+);
+
+test(
+  "new selections preempt a stalled background video",
+  async (t) => {
+    const h = await harness(t);
+
+    h.acquire(
+      asset(
+        "background-a",
+        false,
+      ),
+    );
+
+    h.acquire(
+      asset(
+        "background-b",
+        false,
+      ),
+    );
+
+    await tick();
+
+    const selected =
+      h.acquire(
+        asset(
+          "urgent",
+          false,
+        ),
+        {
+          priority: 0,
+          animate: true,
+        },
+      );
+
+    await tick();
+
+    assert.equal(
+      h.videos.length,
+      3,
+    );
+
+    assert.equal(
+      h.videos[1].src,
+      "",
+    );
+
+    assert.equal(
+      h.videos[2].src,
+      "https://media.test/urgent.mp4",
+    );
+
+    h.frame(
+      h.videos[2],
+      4.95,
+    );
+
+    await tick();
+
+    assert.equal(
+      selected.state.videoReady,
+      true,
+    );
+  },
+);
+
+test(
+  "changing selection pauses the old video and revisiting reuses the decoder",
+  async (t) => {
+    const h = await harness(t);
+
+    const item =
+      h.acquire(
+        asset("switch"),
+        {
+          priority: 0,
+          animate: true,
+        },
+      );
+
+    await tick();
+
+    h.images[0].onload();
+
+    await tick();
+
+    h.frame(
+      h.videos[0],
+      4.95,
+    );
+
+    await tick();
+
+    const originalVideo =
+      h.videos[0];
+
+    assert.equal(
+      item.state.videoReady,
+      true,
+    );
+
+    item.handle.update({
+      priority: 1,
       animate: false,
     });
-  }
 
-  await tick();
+    await tick();
+
+    assert.equal(
+      originalVideo.paused,
+      true,
+    );
 
-  assert.equal(h.images.length, 4);
+    assert.equal(
+      originalVideo.src,
+      "https://media.test/switch.mp4",
+      "deselection must not discard the buffered video",
+    );
+
+    item.handle.update({
+      priority: 0,
+      animate: true,
+    });
 
-  assert.equal(h.images[0].src, "https://media.test/image-7.jpg");
+    await tick();
 
-  h.expire(15_000);
+    assert.equal(
+      h.videos.length,
+      1,
+      "revisiting must reuse the existing video element",
+    );
 
-  await tick();
+    assert.equal(
+      item.state.video,
+      originalVideo,
+    );
 
-  assert.equal(h.images.length, 5);
+    assert.equal(
+      originalVideo.paused,
+      false,
+    );
 
-  assert.equal(h.videos[0].src, "https://media.test/image-7.mp4");
-});
+    h.flags.reduced = true;
 
-test("different mints share one media request and stay alive until the last consumer releases", async (t) => {
-  const h = await harness(t);
+    item.handle.update({
+      priority: 0,
+      animate: true,
+    });
 
-  const first = h.acquire(asset("shared"));
+    await tick();
 
-  const second = h.acquire({
-    ...asset("shared"),
-    assetId: "another-mint",
-  });
-
-  await tick();
-
-  assert.equal(h.images.length, 1);
-
-  first.handle.release();
-
-  await tick();
-
-  h.images[0].onload();
-
-  await tick();
-
-  assert.ok(second.state.image);
-
-  assert.equal(h.videos.length, 0);
-});
-
-test("new selections preempt a stalled background video", async (t) => {
-  const h = await harness(t);
-
-  h.acquire(asset("background-a", false));
-
-  h.acquire(asset("background-b", false));
-
-  await tick();
-
-  const selected = h.acquire(asset("urgent", false), {
-    priority: 0,
-    animate: true,
-  });
-
-  await tick();
-
-  assert.equal(h.videos.length, 3);
-
-  assert.equal(h.videos[1].src, "");
-
-  assert.equal(h.videos[2].src, "https://media.test/urgent.mp4");
-
-  h.frame(h.videos[2], 2.5);
-
-  await tick();
-
-  assert.equal(selected.state.videoReady, true);
-});
-
-test("changing selection pauses the old video and revisiting reuses the decoder", async (t) => {
-  const h = await harness(t);
-
-  const item = h.acquire(asset("switch"), {
-    priority: 0,
-    animate: true,
-  });
-
-  await tick();
-
-  h.images[0].onload();
-
-  await tick();
-
-  h.frame(h.videos[0], 2.5);
-
-  await tick();
-
-  const originalVideo = h.videos[0];
-
-  assert.equal(item.state.videoReady, true);
-
-  item.handle.update({
-    priority: 1,
-    animate: false,
-  });
-
-  await tick();
-
-  assert.equal(originalVideo.paused, true);
-
-  assert.equal(
-    originalVideo.src,
-    "https://media.test/switch.mp4",
-    "deselection must not discard the buffered video",
-  );
-
-  item.handle.update({
-    priority: 0,
-    animate: true,
-  });
-
-  await tick();
-
-  assert.equal(
-    h.videos.length,
-    1,
-    "revisiting must reuse the existing video element",
-  );
-
-  assert.equal(item.state.video, originalVideo);
-
-  assert.equal(originalVideo.paused, false);
-
-  h.flags.reduced = true;
-
-  item.handle.update({
-    priority: 0,
-    animate: true,
-  });
-
-  await tick();
-
-  assert.equal(originalVideo.paused, true);
-
-  h.flags.reduced = false;
-  document.hidden = true;
-
-  item.handle.update({
-    priority: 0,
-    animate: true,
-  });
-
-  await tick();
-
-  assert.equal(originalVideo.paused, true);
-});
-
-test("buffering after playback falls back to the poster without destroying the player", async (t) => {
-  const h = await harness(t);
-
-  const item = h.acquire(asset("stall-after-ready"), {
-    priority: 0,
-    animate: true,
-  });
-
-  await tick();
-
-  h.images[0].onload();
-
-  await tick();
-
-  h.frame(h.videos[0], 2.5);
-
-  await tick();
-
-  const video = h.videos[0];
-
-  assert.equal(item.state.videoReady, true);
-
-  video.onwaiting?.();
-
-  await tick();
-
-  assert.equal(
-    item.state.videoReady,
-    false,
-    "poster should be used while playback is buffering",
-  );
-
-  assert.equal(
-    item.state.video,
-    video,
-    "buffering must not destroy the video player",
-  );
-
-  assert.ok(item.state.image, "poster remains available during buffering");
-
-  h.progress(video, 3);
-
-  await tick();
-
-  assert.equal(
-    item.state.videoReady,
-    true,
-    "video can resume after its buffer recovers",
-  );
-
-  assert.equal(
-    item.state.video,
-    video,
-    "the same player is reused after recovery",
-  );
-});
-
-test("session-cached posters display without video requests after reload", async (t) => {
-  const item = asset("cached", false);
-
-  const storage = new Map([
-    [
-      "nft-posters-v1",
-      JSON.stringify([[item.videoUrl, "data:image/jpeg;base64,frame"]]),
-    ],
-  ]);
-
-  const h = await harness(t, storage);
-
-  const loaded = h.acquire(item);
-
-  await tick();
-
-  assert.ok(loaded.state.image);
-
-  assert.equal(h.videos.length, 0);
-});
-
-test("storage quota errors do not prevent first-frame thumbnails", async (t) => {
-  const h = await harness(t);
-
-  h.flags.storage = false;
-
-  const item = h.acquire(asset("quota", false));
-
-  await tick();
-
-  h.frame(h.videos[0], 2.5);
-
-  await tick();
-
-  assert.ok(item.state.image);
-});
-
-test("canvas failure does not leave static thumbnails permanently loading", async (t) => {
-  const h = await harness(t);
-
-  h.flags.canvas = false;
-
-  const item = h.acquire(asset("no-canvas", false));
-
-  await tick();
-
-  h.frame(h.videos[0], 2.5);
-
-  await tick();
-
-  assert.equal(item.state.failed, true);
-});
-
-test("published poster manifest references small, real JPEG files", () => {
-  const manifest = JSON.parse(
-    readFileSync(new URL("../lib/nft-posters.json", import.meta.url), "utf8"),
-  );
-
-  assert.ok(Object.keys(manifest).length >= 7);
-
-  for (const [video, path] of Object.entries(manifest)) {
-    assert.ok(video.startsWith("https://"));
-
-    assert.match(path, /^\/nft-posters\/[a-f0-9]{20}\.jpg$/);
-
-    const image = readFileSync(new URL(`../public${path}`, import.meta.url));
-
-    assert.equal(image.readUInt16BE(0), 0xffd8);
-
-    assert.ok(image.length < 150_000);
-  }
-});
+    assert.equal(
+      originalVideo.paused,
+      true,
+    );
+
+    h.flags.reduced = false;
+    document.hidden = true;
+
+    item.handle.update({
+      priority: 0,
+      animate: true,
+    });
+
+    await tick();
+
+    assert.equal(
+      originalVideo.paused,
+      true,
+    );
+  },
+);
+
+test(
+  "buffering after playback falls back to the poster without destroying the player",
+  async (t) => {
+    const h = await harness(t);
+
+    const item =
+      h.acquire(
+        asset("stall-after-ready"),
+        {
+          priority: 0,
+          animate: true,
+        },
+      );
+
+    await tick();
+
+    h.images[0].onload();
+
+    await tick();
+
+    h.frame(
+      h.videos[0],
+      4.95,
+    );
+
+    await tick();
+
+    const video =
+      h.videos[0];
+
+    assert.equal(
+      item.state.videoReady,
+      true,
+    );
+
+    // A fully buffered short video should ignore a stray waiting event.
+    video.onwaiting?.();
+
+    await tick();
+
+    assert.equal(
+      item.state.videoReady,
+      true,
+      "fully buffered short video should ignore a stray waiting event",
+    );
+
+    // Now simulate genuinely losing playable buffered data.
+    video._bufferedEnd = 2.5;
+
+    video.onwaiting?.();
+
+    await tick();
+
+    assert.equal(
+      item.state.videoReady,
+      false,
+      "poster should be used when playback genuinely runs out of buffered media",
+    );
+
+    assert.equal(
+      item.state.video,
+      video,
+      "buffering must not destroy the video player",
+    );
+
+    assert.ok(
+      item.state.image,
+      "poster remains available during buffering",
+    );
+
+    h.progress(
+      video,
+      4.95,
+    );
+
+    await tick();
+
+    assert.equal(
+      item.state.videoReady,
+      true,
+      "video can resume after almost the entire short clip is buffered again",
+    );
+
+    assert.equal(
+      item.state.video,
+      video,
+      "the same player is reused after recovery",
+    );
+  },
+);
+
+test(
+  "session-cached posters display without video requests after reload",
+  async (t) => {
+    const item =
+      asset(
+        "cached",
+        false,
+      );
+
+    const storage =
+      new Map([
+        [
+          "nft-posters-v1",
+          JSON.stringify([
+            [
+              item.videoUrl,
+              "data:image/jpeg;base64,frame",
+            ],
+          ]),
+        ],
+      ]);
+
+    const h =
+      await harness(
+        t,
+        storage,
+      );
+
+    const loaded =
+      h.acquire(item);
+
+    await tick();
+
+    assert.ok(
+      loaded.state.image,
+    );
+
+    assert.equal(
+      h.videos.length,
+      0,
+    );
+  },
+);
+
+test(
+  "storage quota errors do not prevent first-frame thumbnails",
+  async (t) => {
+    const h =
+      await harness(t);
+
+    h.flags.storage =
+      false;
+
+    const item =
+      h.acquire(
+        asset(
+          "quota",
+          false,
+        ),
+      );
+
+    await tick();
+
+    h.frame(
+      h.videos[0],
+      4.95,
+    );
+
+    await tick();
+
+    assert.ok(
+      item.state.image,
+    );
+  },
+);
+
+test(
+  "canvas failure does not leave static thumbnails permanently loading",
+  async (t) => {
+    const h =
+      await harness(t);
+
+    h.flags.canvas =
+      false;
+
+    const item =
+      h.acquire(
+        asset(
+          "no-canvas",
+          false,
+        ),
+      );
+
+    await tick();
+
+    h.frame(
+      h.videos[0],
+      4.95,
+    );
+
+    await tick();
+
+    assert.equal(
+      item.state.failed,
+      true,
+    );
+  },
+);
+
+test(
+  "published poster manifest references small, real JPEG files",
+  () => {
+    const manifest =
+      JSON.parse(
+        readFileSync(
+          new URL(
+            "../lib/nft-posters.json",
+            import.meta.url,
+          ),
+          "utf8",
+        ),
+      );
+
+    assert.ok(
+      Object.keys(manifest).length >= 7,
+    );
+
+    for (
+      const [video, path]
+      of Object.entries(manifest)
+    ) {
+      assert.ok(
+        video.startsWith("https://"),
+      );
+
+      assert.match(
+        path,
+        /^\/nft-posters\/[a-f0-9]{20}\.jpg$/,
+      );
+
+      const image =
+        readFileSync(
+          new URL(
+            `../public${path}`,
+            import.meta.url,
+          ),
+        );
+
+      assert.equal(
+        image.readUInt16BE(0),
+        0xffd8,
+      );
+
+      assert.ok(
+        image.length < 150_000,
+      );
+    }
+  },
+);
